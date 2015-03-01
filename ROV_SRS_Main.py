@@ -15,7 +15,7 @@ from collections import deque
 
 from Adafruit_BBIO import ADC
 from Adafruit_BBIO import GPIO
-from Adafruit_BBIO import PWMi
+from Adafruit_BBIO import PWM
 import ROV_SRS_Library as SRS
 
 #
@@ -25,9 +25,9 @@ import ROV_SRS_Library as SRS
 # General Program Constants.
 PWM_AVG_NUM  = 5        # Pulses to average before saving Commands.
 PWM_WID_FREQ = 70.0     # Expected signal frequency [Hz].
-PWM_WID_MAX  = 14.0     # Input signal maximum duty cycle [%].
-PWM_WID_MIN  = 7.0      # Input signal minimum duty cycle [%].
-PWM_WID_TOL  = 20.0     # Tolerance on Pulse Width Deviations [%].
+PWM_WID_MAX  = 14.1     # Input signal maximum duty cycle [%].
+PWM_WID_MIN  = 6.9      # Input signal minimum duty cycle [%].
+PWM_WID_TOL  = 25.0     # Tolerance on Pulse Width Deviations [%].
 
 POS_HIST_NUM = 5        # Number of Position Commands to store.
 
@@ -85,6 +85,7 @@ def main():
     GPIO.setup(PIN_LA_IN, GPIO.IN)
     for __col in range(len(PIN_LA_OUT)):
         GPIO.setup(PIN_LA_OUT[__col], GPIO.OUT)
+
     GPIO.setup(PIN_LA_ENA, GPIO.OUT)
     GPIO.output(PIN_LA_ENA, GPIO.HIGH)
 
@@ -111,14 +112,17 @@ def main():
     ss_avg = 0.0
 
     # Position Commands.
+    la_cmd = 1
     la_cmd_hist = deque(
         (1 for i in range(POS_HIST_NUM)), maxlen = POS_HIST_NUM)
     la_trend = 0
 
+    cs_cmd = 1
     cs_cmd_hist = deque(
         (1 for i in range(POS_HIST_NUM)), maxlen = POS_HIST_NUM)
     cs_trend = 0
 
+    ss_cmd = 1
     ss_cmd_hist = deque(
         (1 for i in range(POS_HIST_NUM)), maxlen = POS_HIST_NUM)
     ss_trend = 0
@@ -132,41 +136,58 @@ def main():
         #
 
         # Determine Average Pulse Width.
-        la_avg = SRS.calc_width(
-            PIN_LA_IN, PWM_AVG_NUM, PWM_WID_FREQ)
+        #la_avg = SRS.get_width(
+        #    PIN_LA_IN, PWM_AVG_NUM, PWM_WID_FREQ,
+        #    PWM_WID_MAX, PWM_WID_MIN, PWM_WID_TOL)
 
         # Add new Position Command to History.
-        la_cmd_hist.append(SRS.set_position(
-            la_avg,
-            PWM_WID_FREQ, PWM_WID_MAX, PWM_WID_MIN, PWM_WID_TOL))
+        #la_cmd = SRS.set_position(
+        #    la_avg,
+        #    PWM_WID_FREQ, PWM_WID_MAX, PWM_WID_MIN, PWM_WID_TOL)
+        #if la_cmd is 1:
+        #    la_cmd = la_cmd_hist[POS_HIST_NUM - 1]
+        #la_cmd_hist.append(la_cmd)
 
         # Check for Position Command Persistance.
-        la_trend = SRS.check_trend(
-            la_cmd_hist,
-            LA_CONTINUOUS)
+        #la_trend = SRS.check_trend(
+        #    la_cmd_hist,
+        #    LA_CONTINUOUS)
 
         # Process Position Command.
-        SRS.move_linear(
-            la_trend,
-            PIN_LA_OUT, PIN_LA_POT, LA_STROKE_TARGET)
+        #SRS.move_linear(
+        #    la_trend,
+        #    PIN_LA_OUT, PIN_LA_POT, LA_STROKE_TARGET)
 
         #
         # Carousel Stepper polling.
         #
 
         # Determine Average Pulse Width.
-        cs_avg = SRS.calc_width(
-            PIN_CS_IN, PWM_AVG_NUM, PWM_WID_FREQ)
+        cs_avg = SRS.get_width(
+            PIN_CS_IN, PWM_AVG_NUM, PWM_WID_FREQ,
+            PWM_WID_MAX, PWM_WID_MIN, PWM_WID_TOL)
+
+        # DEBUG:
+        print 'Carousel Pulse Width: {}'.format(cs_avg)
 
         # Add new Position Command to History.
-        cs_cmd_hist.append(SRS.set_position(
+        cs_cmd = SRS.set_position(
             cs_avg,
-            PWM_WID_FREQ, PWM_WID_MAX, PWM_WID_MIN, PWM_WID_TOL))
+            PWM_WID_FREQ, PWM_WID_MAX, PWM_WID_MIN, PWM_WID_TOL)
+        if cs_cmd is 1:
+            cs_cmd = cs_cmd_hist[POS_HIST_NUM - 1]
+        cs_cmd_hist.append(cs_cmd)
+
+        # DEBUG:
+        print 'Carousel History: {}'.format(cs_cmd_hist)
 
         # Check for Position Command Persistance.
         cs_trend = SRS.check_trend(
             cs_cmd_hist,
             CS_CONTINUOUS)
+
+        # DEBUG:
+        print 'Carousel Trend: {}'.format(cs_trend)
 
         # Process Position Command.
         SRS.move_carousel(
@@ -178,23 +199,24 @@ def main():
         #
 
         # Determine Average Pulse Width.
-        ss_avg = SRS.calc_width(
-            PIN_SS_IN, PWM_AVG_NUM, PWM_WID_FREQ)
+        #ss_avg = SRS.get_width(
+        #    PIN_SS_IN, PWM_AVG_NUM, PWM_WID_FREQ,
+        #    PWM_WID_MAX, PWM_WID_MIN, PWM_WID_TOL)
 
         # Add new Position Command to History.
-        ss_cmd_hist.append(SRS.set_position(
-            ss_avg,
-            PWM_WID_FREQ, PWM_WID_MAX, PWM_WID_MIN, PWM_WID_TOL))
+        #ss_cmd_hist.append(SRS.set_position(
+        #    ss_avg,
+        #    PWM_WID_FREQ, PWM_WID_MAX, PWM_WID_MIN, PWM_WID_TOL))
 
         # Check for Position Command Persistance.
-        ss_trend = SRS.check_trend(
-            ss_cmd_hist,
-            SS_CONTINUOUS)
+        #ss_trend = SRS.check_trend(
+        #    ss_cmd_hist,
+        #    SS_CONTINUOUS)
 
         # Process Position Command.
-        SRS.move_shoulder(
-            ss_trend,
-            PIN_SS_OUT)
+        #SRS.move_shoulder(
+        #    ss_trend,
+        #    PIN_SS_OUT)
 
         #
         # Pressure Transducer polling.

@@ -24,9 +24,11 @@ from Adafruit_BBIO import GPIO
 #
 
 # Hardware-related Constants.
-LA_MAX_STROKE = 2.0     # Firgelli L16-P: Max Stroke length [inch].
-CS_STEP_ANGLE = 1.8     # Soyo Unipolar: Step Angle [degrees].
-SS_STEP_ANGLE = 1.8     # Soyo Unipolar: Step Angle [degrees].
+LA_MAX_STROKE = 2.0              # Firgelli L16-P: Max Stroke length [inch].
+CS_STEP_ANGLE = 1.8              # Soyo Unipolar: Step Angle [degrees].
+SS_STEP_ANGLE = 1.8              # Soyo Unipolar: Step Angle [degrees].
+CS_DRIVE_STEP_PERSIST = 0.001    # Big Easy Driver: Min Persist Time [sec].
+SS_DRIVE_STEP_PERSIST = 0.001    # Easy Driver: Min Persist Time [sec].
 
 # Command Library for Linear Actuator.
 LA_COMMANDS = [[GPIO.HIGH, GPIO.LOW],     # Extend Actuator.
@@ -43,7 +45,7 @@ SS_COMMANDS = [[GPIO.LOW, GPIO.HIGH],     # Take one Step CCW.
                [GPIO.LOW, GPIO.LOW],      # Hold Stepper in place.
                [GPIO.HIGH, GPIO.HIGH]]    # Take one Step CW
 
-def calc_width(pin, size, freq):
+def get_width(pin, size, freq, max, min, tol):
     """Calculate the Pulse Width of a PWM input signal.
 
     This function stores the time of day on a Rising Edge and subsequent 
@@ -58,30 +60,51 @@ def calc_width(pin, size, freq):
         size:       An Integer specifying the sample size.
         freq:       A float specifying the expected frequency of 
                     the PWM signal [Hz].
+        max:        A Float specifying the maximum expected
+                    duty cycle of the PWM signal [%].
+        min:        A Float specifying the minimum expected
+                    duty cycle of the PWM signal [%].
+        tol:        A Float specifying the acceptable tolerance
+                    on deviations in the measured Pulse Width from
+                    the expected values. The excepted values
+                    correspond to the Pulse Widths of the maximum
+                    and minimum expected duty cycle values specified
+                    above. The tolerance is expressed relative to
+                    the millisecond difference between the maximum 
+                    and minimum possible Pulse Widths [%].
 
     Returns:
         avg:        The calculated Pulse Width [milliseconds].
     """
+    __WIDTH_MAX = ((1/freq)*(max/100))
+    __WIDTH_MIN = ((1/freq)*(min/100))
+    __WIDTH_TOL = (__WIDTH_MAX - __WIDTH_MIN)*(tol/100)
+
     avg = 0.0
+
     __rise_flag = 0.0
     __fall_flag = 0.0
-    __pulse_width = 0.0
+    __pwm_width = 0.0
 
     for i in range(size):
         # Determine incoming signal Pulse Width.
         GPIO.wait_for_edge(pin, GPIO.RISING)
         __rise_flag = time.time()
+
         GPIO.wait_for_edge(pin, GPIO.FALLING)
         __fall_flag = time.time()
-        __pulse_width = __fall_flag - __rise_flag
 
-        # Adjust for missed Pulses (CPU busy during Edge event).
-        # This is done by subtracting the PWM period value if the
-        # measured pulse width is found to be greater than the period.
+        __pwm_width = __fall_flag - __rise_flag
 
-        while __pulse_width >= (1/freq):
-            __pulse_width -= (1/freq)
-        avg += __pulse_width
+        # Correct for faulty values (missed edge events, etc.)
+        while __pwm_width >= (1/freq):
+            __pwm_width -= (1/freq)
+        while __pwm_width > (__WIDTH_MAX + __WIDTH_TOL):
+            __pwm_width -= __WIDTH_TOL
+        while __pwm_width < (__WIDTH_MIN - __WIDTH_TOL):
+            __pwm_width += __WIDTH_TOL
+
+        avg += __pwm_width
 
     avg /= size
 
@@ -118,22 +141,20 @@ def set_position(width, freq, max, min, tol):
                     2  == Maximum Pulse Width.
                     1  == Intermediate Pulse Width .
                     0  == Minimum Pulse Width.
-                    -1 == Error.
     """
-    cmd = -1
-    __pwm_width_max = ((1/freq)*(max/100))
-    __pwm_width_min = ((1/freq)*(min/100))
-    __pwm_width_tol = (__pwm_width_max - __pwm_width_min)*(tol/100)
+    __WIDTH_MAX = ((1/freq)*(max/100))
+    __WIDTH_MIN = ((1/freq)*(min/100))
+    __WIDTH_TOL = (__WIDTH_MAX - __WIDTH_MIN)*(tol/100)
 
-    # Check absolute maximum allowable value.
-    if width < (__pwm_width_max + __pwm_width_tol):
-        # Check against multiple minimum values.
-        if width >= (__pwm_width_max - __pwm_width_tol):
-            cmd = 2
-        elif width >= (__pwm_width_min + __pwm_width_tol):
-            cmd = 1
-        elif width >= (__pwm_width_min - __pwm_width_tol):
-            cmd = 0
+    cmd = -1
+
+    # Check pulse width bracket.
+    if width >= (__WIDTH_MAX - __WIDTH_TOL):
+        cmd = 2
+    elif width >= (__WIDTH_MIN + __WIDTH_TOL):
+        cmd = 1
+    elif width >= (__WIDTH_MIN - __WIDTH_TOL):
+        cmd = 0
 
     return cmd
 
@@ -160,30 +181,33 @@ def check_trend(hist, cont):
                     2  == Maximum Pulse Width.
                     1  == Intermediate Pulse Width.
                     0  == Minimum Pulse Width.
-                    -1 == Error.
     """
     trend = -1
+
     __start_flag = True
     __end_flag = True
     __start_index = 0
     __end_index = (len(hist) - 1)
 
     # Check for duration of oldest Command.
-    while __start_flag is True and __start_index < len(hist):
+    while __start_flag is True and __start_index < (len(hist) // 2):
         if hist[__start_index] is hist[0]:
             __start_index += 1
         else:
             __start_flag = False
 
     # Check for duration of newest Command.
-    while __end_flag is True and __end_index >= 0:
+    while __end_flag is True and __end_index >= (len(hist) // 2):
         if hist[__end_index] is hist[len(hist) - 1]:
             __end_index -= 1
         else:
             __end_flag = False
 
     # Check for desired Command trend.
-    if (__start_flag or cont) is True and __end_flag is True:
+    if __start_flag is True and __end_flag is True:
+        if hist[0] is not hist[len(hist) - 1]:
+            trend = hist[len(hist) - 1]
+    elif cont is True and __end_flag is True:
         trend = hist[len(hist) - 1]
 
     return trend
@@ -199,7 +223,6 @@ def move_linear(cmd, out, pot, stroke):
                     2  == Retract Linear Actuator (Open Gripper).
                     1  == Lock current Position.
                     0  == Extend Linear Actuator (Close Gripper).
-                    -1 == Error
         out:        An Array of Strings specifying the pin names on which 
                     the output signals should be sent.
         pot:        A String specifying the pin name on which the input
@@ -210,23 +233,24 @@ def move_linear(cmd, out, pot, stroke):
     Returns:
         N/A
     """
-    __pot_pos = 0.0
-    __upper_lim = 1.0
-    __lower_lim = 1.0 - stroke/LA_MAX_STROKE
+    __UPPER_LIM = 1.0
+    __LOWER_LIM = 1.0 - stroke/LA_MAX_STROKE
 
-	if cmd >= 0:
+    __pot_pos = 0.0
+
+    if cmd >= 0:
         # Begin Linear Actuator motion.
         for __col in range(len(out)):
             GPIO.output(out[__col], LA_COMMANDS[__col][cmd])
 
         # Check Potentiometer Signal.
         if cmd is 2:
-            while __pot_pos > __lower_lim:
+            while __pot_pos > __LOWER_LIM:
                 __pot_pos = ADC.read(pot)    # BUG: Adafruit_BBIO.ADC Library
                 __pot_pos = ADC.read(pot)    # requires two read operations to
                                              # obtain updated values.
         elif cmd is 0:
-            while __pot_pos < __upper_lim:
+            while __pot_pos < __UPPER_LIM:
                 __pot_pos = ADC.read(pot)    # BUG: Adafruit_BBIO.ADC Library
                 __pot_pos = ADC.read(pot)    # requires two read operations to
                                              # obtain updated values.
@@ -246,26 +270,36 @@ def move_carousel(cmd, out, gripper):
                     2  == Advance Carousel Stepper (Change Gripper).
                     1  == Lock current Position.
                     0  == Lock current Position.
-                    -1 == Error.
         out:        An Array of Strings specifying the pin names on which 
                     the output signals should be sent.
-        gripper:    A Float specifying the number of grippers currently
+        gripper:    An Integer specifying the number of grippers currently
                     mounted on the Carousel.
 
     Returns:
         N/A
     """
+    __path_steps = ((1/float(gripper))*360)/(CS_STEP_ANGLE)
+
+    # DEBUG:
+    print 'Path Steps: {}'.format(__path_steps)
+
     if cmd is 2:
-        # Calculate required number of Steps.
-        __path_steps = ((1/gripper)*360)/(CS_STEP_ANGLE)
+        # DEBUG:
+        print 'Rotating Carousel\n'
 
         # Loop over single-step command.
-        for __steps in range(__path_steps):
+        for __steps in range(int(__path_steps)):
             for __col in range((len(out))):
                 GPIO.output(out[__col], CS_COMMANDS[cmd][__col])
+            time.sleep(CS_DRIVE_STEP_PERSIST)
+
             GPIO.output(out[1], GPIO.LOW)
+            time.sleep(CS_DRIVE_STEP_PERSIST)
 
     else:
+        # DEBUG:
+        print 'Halting Carousel\n'
+
         # Hold Carousel Stepper at desired Position.
         for __index in range(len(out)):
             GPIO.output(out[__index], GPIO.LOW)
@@ -281,7 +315,6 @@ def move_shoulder(cmd, out):
                     2  == Step Clockwise (Tilt Down).
                     1  == Lock current Position.
                     0  == Step Counter-Clockwise (Tilt Up).
-                    -1 == Error.
         out:        An Array of Strings specifying the pin names on which 
                     the output signals should be sent.
 
@@ -293,7 +326,10 @@ def move_shoulder(cmd, out):
         # Issue single Command (Step or Hold).
         for __col in range((len(out))):
             GPIO.output(out[__col], CS_COMMANDS[cmd][__col])
+        time.sleep(SS_DRIVE_STEP_PERSIST)
+
         GPIO.output(out[1], GPIO.LOW)
+        time.sleep(SS_DRIVE_STEP_PERSIST)
 
     else:
         # Hold Shoulder Stepper at desired Position.
