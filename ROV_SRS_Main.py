@@ -21,14 +21,13 @@ import ROV_SRS_Library as SRS
 #
 
 # General Program Constants.
-PWM_AVG_NUM  = 5		# Pulses to average before state transitions.
+PWM_AVG_NUM  = 5		# Pulses to average before saving Commands.
 PWM_WID_FREQ = 70		# Expected signal frequency [Hz].
 PWM_WID_MAX  = 14		# Input signal maximum duty cycle [%].
 PWM_WID_MIN  = 7		# Input signal minimum duty cycle [%].
 PWM_WID_TOL  = 20		# Tolerance on Pulse Width Deviations [%].
 
-POS_HIST_NUM = 5		# Previous Position Commands to compare against
-						#	before actuator motions.
+POS_HIST_NUM = 5		# Number of Position Commands to store.
 
 # Linear Actuator Constants.
 PIN_LA_IN   = "P8_10"		# Pin for Input PWM from RC Controller.
@@ -100,19 +99,22 @@ def main():
 	#
 	
 	# Pulse Width Averages.
-	la_pwm_avg = 0.0
-	cs_pwm_avg = 0.0
-	ss_pwm_avg = 0.0
+	la_avg = 0.0
+	cs_avg = 0.0
+	ss_avg = 0.0
 	
-	# Position Command Histories.
-	la_pos = 0
-	la_pos_hist = deque(POS_HIST_NUM)
+	# Position Commands.
+	la_cmd = 0
+	la_cmd_hist = deque(POS_HIST_NUM)
+	la_trend = 0
 	
-	cs_pos = 0
-	cs_pos_hist = deque(POS_HIST_NUM)
+	cs_cmd = 0
+	cs_cmd_hist = deque(POS_HIST_NUM)
+	cs_trend = 0
 	
-	ss_pos = 0
-	ss_pos_hist = deque(POS_HIST_NUM)
+	ss_cmd = 0
+	ss_cmd_hist = deque(POS_HIST_NUM)
+	ss_trend = 0
 	
 	#
 	# Main program polling loop.
@@ -123,18 +125,24 @@ def main():
 		#
 		
 		# Determine Average Pulse Width.
-		la_pwm_avg = SRS.calc_pulse_width(
+		la_avg = SRS.calc_width(
 			PIN_LA_IN, PWM_AVG_NUM, PWM_WID_FREQ)
 		
 		# Add new Position Command to History.
-		la_pos = SRS.set_position(
-			la_pwm_avg,
+		la_cmd = SRS.set_position(
+			la_avg,
 			PWM_WID_FREQ, PWM_WID_MAX, PWM_WID_MIN, PWM_WID_TOL)
-		la_pos_hist.append(la_pos)
+		la_cmd_hist.append(la_cmd)
 		
-		# Check for Position Change.
+		# Check for Position Command Persistance.
+		la_trend = SRS.check_trend(
+			la_cmd_hist,
+			POS_HIST_NUM)
+		
+		# Process Position Command.
 		SRS.move_linear(
-			la_pos_hist, POS_HIST_NUM, PIN_LA_OUT1, PIN_LA_OUT2,
+			la_trend,
+			POS_HIST_NUM, PIN_LA_OUT1, PIN_LA_OUT2,
 			(LA_STROKE_TARGET/LA_STROKE_MAX))
 		
 		#
