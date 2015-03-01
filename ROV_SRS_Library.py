@@ -16,9 +16,9 @@ from collections import deque
 import sys
 import time
 
-import Adafruit_BBIO.ADC as ADC
-import Adafruit_BBIO.GPIO as GPIO
-import Adafruit_BBIO.PWM as PWM
+from Adafruit_BBIO import ADC
+from Adafruit_BBIO import GPIO
+from Adafruit_BBIO import PWM
 
 #
 # Constant Definitions.
@@ -57,7 +57,7 @@ def calc_width(pin, size, freq):
 					signal is expected. The pin name should be in the 
 					format defined by the Adafruit_BBIO library.
 		size:		An Integer specifying the sample size.
-		freq:		An Integer specifying the expected frequency of 
+		freq:		A float specifying the expected frequency of 
 					the PWM signal [Hz].
 	
 	Returns:
@@ -67,7 +67,7 @@ def calc_width(pin, size, freq):
 	__rise_flag = 0.0
 	__fall_flag = 0.0
 	__pulse_width = 0.0
-	
+
 	for i in range(size):
 		# Determine incoming signal Pulse Width.
 		GPIO.wait_for_edge(pin, GPIO.RISING)
@@ -79,12 +79,17 @@ def calc_width(pin, size, freq):
 		# Adjust for missed Pulses (CPU busy during Edge event).
 		# This is done by subtracting the PWM period value if the
 		# measured pulse width is found to be greater than the period.
-		while __pulse_width > (1/freq):
-			__pulse_width -= (1/freq)
 		
+		while __pulse_width >= (1/freq):
+			__pulse_width -= (1/freq)
 		avg += __pulse_width
 	
-	return (avg /= size)
+	avg /= size
+
+	# DEBUG:
+	print 'Pulse Width: {}'.format(avg)
+
+	return avg
 
 def set_position(width, freq, max, min, tol):
 	"""Set the Position Command corresponding to a PWM Pulse Width.
@@ -96,13 +101,13 @@ def set_position(width, freq, max, min, tol):
 	Args:
 		width:		A Float specifying the measured Pulse Width
 					[milliseconds].
-		freq:		An Integer specifying the expected frequency
+		freq:		A Float specifying the expected frequency
 					of the PWM signal [Hz].
-		max:		An Integer specifying the maximum expected
+		max:		A Float specifying the maximum expected
 					duty cycle of the PWM signal [%].
-		min:		An Integer specifying the minimum expected
+		min:		A Float specifying the minimum expected
 					duty cycle of the PWM signal [%].
-		tol:		An Integer specifying the acceptable tolerance
+		tol:		A Float specifying the acceptable tolerance
 					on deviations in the measured Pulse Width from
 					the expected values. The excepted values
 					correspond to the Pulse Widths of the maximum
@@ -123,6 +128,11 @@ def set_position(width, freq, max, min, tol):
 	__pwm_width_max = ((1/freq)*(max/100))
 	__pwm_width_min = ((1/freq)*(min/100))
 	__pwm_width_tol = (__pwm_width_max - __pwm_width_min)*(tol/100)
+
+	# DEBUG:
+	print 'Max Width: {}'.format(__pwm_width_max)
+	print 'Min Width: {}'.format(__pwm_width_min)
+	print 'Tolerance: {}'.format(__pwm_width_tol)
 	
 	# Check absolute maximum allowable value.
 	if width < (__pwm_width_max + __pwm_width_tol):
@@ -133,10 +143,13 @@ def set_position(width, freq, max, min, tol):
 			cmd = 1
 		elif width >= (__pwm_width_min - __pwm_width_tol):
 			cmd = 0
+
+	# DEBUG:
+	print 'Command: {}\n'.format(cmd)
 	
 	return cmd
 
-def check_trend(hist, length):
+def check_trend(hist):
 	"""Check for Position Command persistance.
 	
 	This function returns the most recent in a series of Position
@@ -148,7 +161,6 @@ def check_trend(hist, length):
 					Commands, which are themselves integers with
 					values between -1 and 2. Refer to function Returns
 					for further details.
-		length:		An Integer specifying the length of the "hist" deque.
 	
 	Returns:
 		trend:		The persistant value of the Command series 2nd half.
@@ -161,10 +173,10 @@ def check_trend(hist, length):
 	__start_flag = True
 	__end_flag = True
 	__start_index = 0
-	__end_index = length
-	
+	__end_index = (len(hist) - 1)
+
 	# Check for duration of oldest Command.
-	while __start_flag is True and __start_index < length:
+	while __start_flag is True and __start_index < len(hist):
 		if hist[__start_index] is hist[0]:
 			__start_index += 1
 		else:
@@ -172,14 +184,14 @@ def check_trend(hist, length):
 	
 	# Check for duration of newest Command.
 	while __end_flag is True and __end_index >= 0:
-		if hist[__end_index] is hist[length]:
+		if hist[__end_index] is hist[len(hist) - 1]:
 			__end_index -= 1
 		else:
 			__end_flag = False
 			
 	# Check for 50/50 command split.
-	if start_flag is True and end_flag is True:
-		trend = hist[length]
+	if __start_flag is True and __end_flag is True:
+		trend = hist[len(hist) - 1]
 	
 	return trend
 	
@@ -206,7 +218,7 @@ def move_linear(cmd, out, stroke):
 	if cmd is 2 or cmd is 0:
 		# Begin Linear Actuator motion.
 		for __col in range(len(out)):
-			GPIO.output(out(__col), LA_COMMANDS[__col][cmd])
+			GPIO.output(out[__col], LA_COMMANDS[__col][cmd])
 
 		if cmd is 2:
 			# Retract Linear Actuator for specific amount of time.
@@ -221,7 +233,7 @@ def move_linear(cmd, out, stroke):
 
 	# Hold Linear Actuator at desired Position.
 	for __index in range(len(out)):
-		GPIO.output(out(__index), GPIO.LOW)
+		GPIO.output(out[__index], GPIO.LOW)
 	
 def move_carousel(cmd, out, angle):
 	"""Move the Carousel Stepper to match the desired Position Command.
@@ -319,23 +331,23 @@ def move_shoulder(cmd, out, step):
 	return next
 	
 def setup_logfile(name):
-    """Create File for data logging.
-	
+	"""Create File for data logging.
+
 	This function creates a CSV file, appends the current date to the
 	filename, and opens the file for data recording.
-	
-    Args:
+
+	Args:
 		name:		A String specifying the desired file name. The current
 					date will be appended to this string.
-	
-    Returns:
+
+	Returns:
 		N/A	
-    """
+	"""
 	__fmt = '%Y-%m-%d_{name}'
-	
+
 	# Create name with timestamp appended.
 	datename = datetime.datetime.now().strftime(__fmt).format(name = name)
-	
+
 	# Open the file in write mode.
 	file = open(datename,'w')
 

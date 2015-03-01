@@ -13,7 +13,8 @@
 
 from collections import deque
 
-import Adafruit_BBIO.GPIO as GPIO
+from Adafruit_BBIO import ADC
+from Adafruit_BBIO import GPIO
 import ROV_SRS_Library as SRS
 
 #
@@ -22,15 +23,15 @@ import ROV_SRS_Library as SRS
 
 # General Program Constants.
 PWM_AVG_NUM  = 5		# Pulses to average before saving Commands.
-PWM_WID_FREQ = 70		# Expected signal frequency [Hz].
-PWM_WID_MAX  = 14		# Input signal maximum duty cycle [%].
-PWM_WID_MIN  = 7		# Input signal minimum duty cycle [%].
-PWM_WID_TOL  = 20		# Tolerance on Pulse Width Deviations [%].
+PWM_WID_FREQ = 70.0		# Expected signal frequency [Hz].
+PWM_WID_MAX  = 14.0		# Input signal maximum duty cycle [%].
+PWM_WID_MIN  = 7.0		# Input signal minimum duty cycle [%].
+PWM_WID_TOL  = 20.0		# Tolerance on Pulse Width Deviations [%].
 
 POS_HIST_NUM = 5		# Number of Position Commands to store.
 
 # Linear Actuator Constants.
-PIN_LA_IN  =  "P8_10"		# Pin for Input PWM from RC Controller.
+PIN_LA_IN  =  "P8_8"		# Pin for Input PWM from RC Controller.
 PIN_LA_ENA =  "P8_13"		# Pin for Output-High Enable Signal.
 PIN_LA_OUT = ["P8_11",		# Pin for Output to Driver CH1.
 			  "P8_9"]		# Pin for Output to Driver CH2.
@@ -39,7 +40,7 @@ LA_STROKE_MAX    = 2		# Maximum stroke length [inch].
 LA_STROKE_TARGET = 1.25		# Target stroke length [inch].
 
 # Carousel Stepper Constants.
-PIN_CS_IN  =  "P8_20"		# Pin for Input PWM from RC Controller.
+PIN_CS_IN  =  "P8_10"		# Pin for Input PWM from RC Controller.
 PIN_CS_VCC =  "P8_27"		# Pin for Supply Voltage.
 PIN_CS_OUT = ["P8_25",		# Pin for Output to Phase A Switch 1.
 			  "P8_23",		# Pin for Output to Phase A Switch 2.
@@ -49,7 +50,7 @@ PIN_CS_OUT = ["P8_25",		# Pin for Output to Phase A Switch 1.
 CS_GRIPPER_NUM = 20			# Number of Grippers on ROV.
 
 # Shoulder Stepper Constants.
-PIN_SS_IN  =  "P8_30"		# Pin for Input PWM from RC Controller.
+PIN_SS_IN  =  "P8_26"		# Pin for Input PWM from RC Controller.
 PIN_SS_VCC =  "P8_37"		# Pin for Supply Voltage.
 PIN_SS_OUT = ["P8_35",		# Pin for Output to Phase A Switch 1.
 			  "P8_33",		# Pin for Output to Phase A Switch 2.
@@ -71,7 +72,7 @@ def main():
 	machines (one for each of the actuators on the SRS).
 	
 	Args:
-		N/A
+		n/A
 	
 	Returns:
 		N/A
@@ -113,13 +114,16 @@ def main():
 	ss_avg = 0.0
 	
 	# Position Commands.
-	la_cmd_hist = deque(POS_HIST_NUM)
+	la_cmd_hist = deque(
+		(1 for i in range(POS_HIST_NUM)), maxlen = POS_HIST_NUM)
 	la_trend = 0
 	
-	cs_cmd_hist = deque(POS_HIST_NUM)
+	cs_cmd_hist = deque(
+		(1 for i in range(POS_HIST_NUM)), maxlen = POS_HIST_NUM)
 	cs_trend = 0
 	
-	ss_cmd_hist = deque(POS_HIST_NUM)
+	ss_cmd_hist = deque(
+		(1 for i in range(POS_HIST_NUM)), maxlen = POS_HIST_NUM)
 	ss_trend = 0
 	
 	# Shoulder Stepper: Step sequence counter.
@@ -136,17 +140,15 @@ def main():
 		# Determine Average Pulse Width.
 		la_avg = SRS.calc_width(
 			PIN_LA_IN, PWM_AVG_NUM, PWM_WID_FREQ)
-		
+
 		# Add new Position Command to History.
 		la_cmd_hist.append(SRS.set_position(
 			la_avg,
 			PWM_WID_FREQ, PWM_WID_MAX, PWM_WID_MIN, PWM_WID_TOL))
-		
+	
 		# Check for Position Command Persistance.
-		la_trend = SRS.check_trend(
-			la_cmd_hist,
-			POS_HIST_NUM)
-		
+		la_trend = SRS.check_trend(la_cmd_hist)
+
 		# Process Position Command.
 		SRS.move_linear(
 			la_trend,
@@ -157,48 +159,44 @@ def main():
 		#
 		
 		# Determine Average Pulse Width.
-		cs_avg = SRS.calc_width(
-			PIN_CS_IN, PWM_AVG_NUM, PWM_WID_FREQ)
-		
+	#	cs_avg = SRS.calc_width(
+	#		PIN_CS_IN, PWM_AVG_NUM, PWM_WID_FREQ)
+
 		# Add new Position Command to History.
-		cs_cmd_hist.append(SRS.set_position(
-			cs_avg,
-			PWM_WID_FREQ, PWM_WID_MAX, PWM_WID_MIN, PWM_WID_TOL))
-		
+	#	cs_cmd_hist.append(SRS.set_position(
+	#		cs_avg,
+	#		PWM_WID_FREQ, PWM_WID_MAX, PWM_WID_MIN, PWM_WID_TOL))
+
 		# Check for Position Command Persistance.
-		cs_trend = SRS.check_trend(
-			cs_cmd_hist,
-			POS_HIST_NUM)
-		
+	#	cs_trend = SRS.check_trend(cs_cmd_hist)
+
 		# Process Position Command.
-		SRS.move_carousel(
-			cs_trend,
-			PIN_CS_OUT, (1/CS_GRIPPER_NUM))
+	#	SRS.move_carousel(
+	#		cs_trend,
+	#		PIN_CS_OUT, (1/CS_GRIPPER_NUM))
 		
 		#
 		# Shoulder Stepper polling.
 		#
 		
 		# Determine Average Pulse Width.
-		ss_avg = SRS.calc_width(
-			PIN_SS_IN, PWM_AVG_NUM, PWM_WID_FREQ)
+	#	ss_avg = SRS.calc_width(
+	#		PIN_SS_IN, PWM_AVG_NUM, PWM_WID_FREQ)
 		
 		# Add new Position Command to History.
-		ss_cmd_hist.append(SRS.set_position(
-			ss_avg,
-			PWM_WID_FREQ, PWM_WID_MAX, PWM_WID_MIN, PWM_WID_TOL))
-		
+	#	ss_cmd_hist.append(SRS.set_position(
+	#		ss_avg,
+	#		PWM_WID_FREQ, PWM_WID_MAX, PWM_WID_MIN, PWM_WID_TOL))
+
 		# Check for Position Command Persistance.
-		ss_trend = SRS.check_trend(
-			ss_cmd_hist,
-			POS_HIST_NUM)
-		
+	#	ss_trend = SRS.check_trend(ss_cmd_hist)
+
 		# Process Position Command.
-		ss_step = SRS.move_stepper(
-			ss_trend,
-			PIN_SS_OUT,
-			ss_step)
-		
+	#	ss_step = SRS.move_shoulder(
+	#		ss_trend,
+	#		PIN_SS_OUT,
+	#		ss_step)
+
 		#
 		# Pressure Transducer polling.
 		#
