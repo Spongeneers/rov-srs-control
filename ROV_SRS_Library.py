@@ -1,3 +1,7 @@
+# Copyright [2015], [Jonathan Lee]
+# Distributed under the terms of the BSD 3-Clause License
+#
+#
 # ROV_SRS_Library
 #
 #
@@ -26,4 +30,3 @@ def calc_pulse_width(pin_name):
 			milliseconds.
 	"""
 
-	
