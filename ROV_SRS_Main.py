@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# Copyright [2015], [Jonathan Lee]
+# Copyright 2015, Jonathan Lee
 # Distributed under the terms of the BSD 3-Clause License
 #
 #
@@ -8,40 +8,55 @@
 #
 # Overview:	The main runtime script to handle SRS Control.
 #
-# Authors:	Jonathan Lee (2015)
+# Authors:	Jonathan Lee
 #
 
-import ROV_SRS_Library as ROV
 import Adafruit_BBIO.GPIO as GPIO
-import Adafruit_BBIO.PWM as PWM
+import ROV_SRS_Library as SRS
 
-# Define Module-level Constants.
+#
+# Constant Definitions.
 #
 # Refer to the "Adafruit_BBIO" documentation regarding acceptable naming
 # formats for Pins.
 
 # General Program Constants.
-PULSE_NUM_AVG = 5			# Number of Pulses to average before state transitions.
-PULSE_WID_HI = 0.002		# Input Pulse Width (70 Hz, 14% Duty Cycle) [msec].
-PULSE_WID_LO = 0.001		# Input Pulse Width (70 Hz, 7% Duty Cycle) [msec].
-PULSE_WID_TOL = 0.00025		# Tolerance on Pulse Width Deviations [msec].
-PULSE_WID_LIM = 0.014		# Upper Limit on Pulse Widths (70 Hz, 1 Period) [msec].
+PULSE_AVG_NUM  = 5		# Pulses to average before state transitions.
+PULSE_WID_MAX  = 14		# Input signal maximum duty cycle [%].
+PULSE_WID_MIN  = 7		# Input signal minimum duty cycle [%].
+PULSE_WID_TOL  = 25		# Tolerance on Pulse Width Deviations [gap %].
+PULSE_WID_FREQ = 70		# Expected signal frequency [Hz].
 
-# Linear Actuator related Constants.
-LIN_IN1 = "P8_12"		# Pin for Input PWM from RC Controller.
-LIN_ENA = "P9_16"		# Pin for Output High Enable Signal.
-LIN_OUT1 = "P9_14"		# Pin for Output High/Low to Driver CH1.
-LIN_OUT2 = "P9_12"		# Pin for Output High/Low to Driver CH2.
+POS_HIST_NUM = 5		# Previous Position Commands to compare against
+						#	before actuator motions.
+
+# Linear Actuator Constants.
+PIN_LIN_IN   = "P8_12"		# Pin for Input PWM from RC Controller.
+PIN_LIN_ENA  = "P9_16"		# Pin for Output High Enable Signal.
+PIN_LIN_OUT1 = "P9_14"		# Pin for Output High/Low to Driver CH1.
+PIN_LIN_OUT2 = "P9_12"		# Pin for Output High/Low to Driver CH2.
+
+LIN_STROKE_MAX    = 2		# Maximum stroke length [inch].
+LIN_STROKE_TARGET = 1.5		# Target stroke length [inch].
+
+# Carousel Stepper Constants.
+# TODO(vjon@alumni.ubc.ca): Define Pins
+
+# Shoulder Stepper Constants.
+# TODO(vjon@alumni.ubc.ca): Define Pins
+
+# Pressure Transducer Constants.
+# TODO(vjon@alumni.ubc.ca): Define Pins
 
 def main():
 	"""Translates RC Controller Input to appropriate actuator signals.
 	
-	This function utilizes a set of initial variable values to setup
-	desired functionality parameters (e.g. actuator stroke length), then
-	enters a polling loop to continually check the state of the input
-	signals. Upon proper conditions being met, changes in these inputs
-	cause the program to enter and iterate through one of three state
-	machines (one for each of the actuators on board the SRS).
+	This function utilizes a set of initial variable values to setup desired 
+	functionality parameters (e.g. actuator stroke length), then enters a 
+	polling loop to continually check the state of the input signals. Upon 
+	proper conditions being met, changes in these inputs cause the program to 
+	enter and iterate through one of three state machines (one for each of the 
+	actuators on the SRS).
 	
 	Args:
 		N/A
@@ -49,5 +64,12 @@ def main():
 	Returns:
 		N/A
 	"""
+	# Initialize Pins.
+	GPIO.setup(LIN_IN, GPIO.IN)
+	GPIO.setup(LIN_ENA, GPIO.OUT)
+	GPIO.setup(LIN_OUT1, GPIO.OUT)
+	GPIO.setup(LIN_OUT2, GPIO.OUT)
+	# TODO(vjon@alumni.ubc.ca): Continue with remaining Pins.
 	
-	# Define Constant parameters.
+	# Initialize Variables.
+	
