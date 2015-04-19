@@ -5,7 +5,7 @@
 # ROV_SRS_Library
 #
 #
-# Overview:	A collection of helper functions used by the BeagleBone
+# Overview:	A collection of helper functions used by the BeagleBone Black
 #		to control the ROV SRS Actuators.
 #
 # Authors:	Jonathan Lee
@@ -141,30 +141,26 @@ def move_linear(la_hist, hist_len, la_out1, la_out2, stroke):
 	
 	end_flag = True
 	end_index = hist_len
-	end_count = 0
 	
 	# Check for duration of newest Command.
 	while end_flag is True and end_index >= 0
 		if la_hist[end_index] is la_hist[hist_len]
-			end_count += 1
 			end_index -= 1
 		else
 			end_flag = False
 	
 	start_flag = True
-	start_index = 0
 	start_count = 0
 	
 	# Check for duration of oldest Command.
 	while start_flag is True and start_index < hist_len
 		if la_hist[start_index] is la_hist[0]
-			start_count += 1
 			start_index += 1
 		else
 			start_flag = False
 			
 	# Change Linear Actuator Position if Command History meets criteria.
-	if end_count is (hist_len - hist_len//2) and start_count is (hist_len//2)
+	if start_flag is True and end_flag is True
 		if la_hist[hist_len] is 2
 			# Retract Linear Actuator for specific amount of time.
 			GPIO.output(PIN_LA_OUT1, GPIO.LOW)
