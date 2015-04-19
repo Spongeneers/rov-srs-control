@@ -47,7 +47,7 @@ PIN_SS_IN = "P8_30"			# Pin for Input PWM from RC Controller.
 # TODO: Define Pins
 
 # Pressure Transducer Constants.
-PIN_PT_IN = "P8_40"			# Pin for Input Data from Transducer.
+PIN_PT_IN  = "P9_39"		# Pin for Input Data from Transducer.
 # TODO: Define Pins
 
 def main():
@@ -75,9 +75,12 @@ def main():
 	GPIO.setup(PIN_LA_OUT2, GPIO.OUT)
 	
 	GPIO.setup(PIN_CS_IN, GPIO.IN)
+	# TODO: Continue with remaining Pins.
 	
 	GPIO.setup(PIN_SS_IN, GPIO.IN)
 	# TODO: Continue with remaining Pins.
+	
+	ADC.setup()
 	
 	#
 	# Set Hardware to default States.
@@ -93,6 +96,9 @@ def main():
 	
 	# Shoulder Stepper: Hold current position.
 	# TODO
+	
+	# Pressure Transducer: Open file for data-logging.
+	# TODO(Giles)
 	
 	#
 	# Initialize Variables.

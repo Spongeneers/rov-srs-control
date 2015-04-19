@@ -1,4 +1,4 @@
-# Copyright 2015, Jonathan Lee
+# Copyright 2015, Giles Fernandes, Jonathan Lee
 # Distributed under the terms of the BSD 3-Clause License
 #
 #
@@ -8,12 +8,17 @@
 # Overview:	A collection of helper functions used by the BeagleBone Black
 #		to control the ROV SRS Actuators.
 #
-# Authors:	Jonathan Lee
+# Authors:	Giles Fernandes, Jonathan Lee
 #
 
+from datetime import datetime
+from collections import deque
+import sys
+import time
+
+import Adafruit_BBIO.ADC as ADC
 import Adafruit_BBIO.GPIO as GPIO
 import Adafruit_BBIO.PWM as PWM
-import time
 
 #
 # Constant Definitions.
@@ -74,15 +79,15 @@ def set_position(width, freq, max, min, tol):
 	values and returns the corresponding Position Command.
 	
 	Args:
-		width:		A float specifying the measured Pulse Width
+		width:		A Float specifying the measured Pulse Width
 					[milliseconds].
-		freq:		An integer specifying the expected frequency
+		freq:		An Integer specifying the expected frequency
 					of the PWM signal [Hz].
-		max:		An integer specifying the maximum expected
+		max:		An Integer specifying the maximum expected
 					duty cycle of the PWM signal [%].
-		min:		An integer specifying the minimum expected
+		min:		An Integer specifying the minimum expected
 					duty cycle of the PWM signal [%].
-		tol:		An integer specifying the acceptable tolerance
+		tol:		An Integer specifying the acceptable tolerance
 					on deviations in the measured Pulse Width from
 					the expected values. The excepted values
 					correspond to the Pulse Widths of the maximum
@@ -124,11 +129,11 @@ def check_trend(hist, length):
 	types of Position Commands.
 	
 	Args:
-		hist:		A deque containing the history of Position
+		hist:		A Deque containing the history of Position
 					Commands, which are themselves integers with
 					values between -1 and 2. Refer to function Returns
 					for further details.
-		length:		An integer specifying the length of the "hist" deque.
+		length:		An Integer specifying the length of the "hist" deque.
 	
 	Returns:
 		trend:		The persistant value of the Command series 2nd half.
@@ -175,11 +180,11 @@ def move_linear(cmd, out1, out2, stroke):
 					1  == Lock current Position.
 					0  == Extend Linear Actuator (Close Gripper).
 					-1 == Error
-		out1:		A string specifying the pin name on which the Extend
+		out1:		A String specifying the pin name on which the Extend
 					output signal should be sent.
-		out2:		A string specifying	the pin name on which the Retract
+		out2:		A String specifying	the pin name on which the Retract
 					output signal should be sent.
-		stroke:		A float specifying the stroke fraction desired for
+		stroke:		A Float specifying the stroke fraction desired for
 					the shaft movement.
 	
 	Returns:
@@ -195,7 +200,7 @@ def move_linear(cmd, out1, out2, stroke):
 		GPIO.output(out1, GPIO.HIGH)
 		GPIO.output(out2, GPIO.LOW)
 		time.sleep(LA_STROKE_TIME)
-	# TODO: Error handling.
+	# TODO(Jonathan): Error handling.
 
 	# Hold Linear Actuator at desired Position.
 	GPIO.output(out1, GPIO.LOW)
@@ -213,20 +218,21 @@ def move_carousel(cmd, out1, out2, out3, out4, angle):
 					1  == Lock current Position.
 					0  == Lock current Position.
 					-1 == Error.
-		out1:		A string specifying the pin name on which the Phase A
+		out1:		A String specifying the pin name on which the Phase A
 					Switch 1 signal should be sent.
-		out2:		A string specifying	the pin name on which the Phase A
+		out2:		A String specifying	the pin name on which the Phase A
 					Switch 2 signal should be sent.
-		out3:		A string specifying the pin name on which the Phase B
+		out3:		A String specifying the pin name on which the Phase B
 					Switch 1 signal should be sent.
-		out4:		A string specifying	the pin name on which the Phase B
+		out4:		A String specifying	the pin name on which the Phase B
 					Switch 2 signal should be sent.
-		angle:		A float specifying the circle fraction desired for
+		angle:		A Float specifying the circle fraction desired for
 					the shaft rotation.
 	
 	Returns:
 		N/A
 	"""
+	# TODO(Jonathan)
 
 def move_shoulder(cmd, out1, out2, out3, out4, step):
 	"""Move the Shoulder Stepper to match the desired Position Command.
@@ -240,17 +246,85 @@ def move_shoulder(cmd, out1, out2, out3, out4, step):
 					1  == Lock current Position.
 					0  == Step Counter-Clockwise (Tilt Up).
 					-1 == Error.
-		out1:		A string specifying the pin name on which the Phase A
+		out1:		A String specifying the pin name on which the Phase A
 					Switch 1 signal should be sent.
-		out2:		A string specifying	the pin name on which the Phase A
+		out2:		A String specifying	the pin name on which the Phase A
 					Switch 2 signal should be sent.
-		out3:		A string specifying the pin name on which the Phase B
+		out3:		A String specifying the pin name on which the Phase B
 					Switch 1 signal should be sent.
-		out4:		A string specifying	the pin name on which the Phase B
+		out4:		A String specifying	the pin name on which the Phase B
 					Switch 2 signal should be sent.
-		step:		An integer specifying the next Phase sequence for
+		step:		An Integer specifying the next Phase sequence for
 					continued rotation.
 	
 	Returns:
 		N/A
 	"""
+	# TODO(Jonathan)
+	
+def setup_logfile(name):
+    """Create File for data logging.
+	
+	This function creates a CSV file, appends the current date to the
+	filename, and opens the file for data recording.
+	
+    Args:
+		name:		A String specifying the desired file name. The current
+					date will be appended to this string.
+	
+    Returns:
+		N/A	
+    """
+	__fmt = '%Y-%m-%d_{name}'
+	
+	# Create name with timestamp appended.
+	datename = datetime.datetime.now().strftime(__fmt).format(name = name)
+	
+	# Open the file in write mode.
+	file = open(datename,'w')
+
+def read_pressure(pin):
+	"""Read the pressure sensor value.
+
+	This function reads the analog input from the pressure sensor and 
+	returns the corresponding pressure differential value.
+	
+	Args:
+		pin:		A String specifying the pin name on which the 
+					pressure sensor signal is expected.
+	
+	Returns:
+		__diff:		The calculated pressure difference [psi].
+	"""
+	# Analog read voltage of the pressure differential sensor.
+	__diff = ADC.read_raw(pin)	
+	
+	# TODO(Giles): Map voltage value to pressure differential.	
+	
+	return __diff
+	
+def log_pressure(pin, freq):
+	"""Log the pressure difference into the log file.
+	
+	This function reads the pressure from the sensor and writes a time 
+	stamp and pressure value to a CSV log file.
+	
+	Args:
+		pin:		A String specifying the pin name on which the 
+					pressure sensor signal is excepted.
+		freq:		An Integer specifying the desired logging 
+					frequency [Hz].
+	
+	Returns:
+		N/A	
+	"""
+	__diff = read_pressure(pin)
+
+	# TODO(Giles): Check if memory has been filled.
+	# If memory has not been filled, write to file.
+	
+	# Log Format: Time,Pressure
+	file.write(datetime.now().strftime('%H:%M:%S'))
+	file.write("\t")
+	file.write(str(__diff))
+	file.write("\n")
