@@ -30,21 +30,31 @@ PWM_WID_TOL  = 20		# Tolerance on Pulse Width Deviations [%].
 POS_HIST_NUM = 5		# Number of Position Commands to store.
 
 # Linear Actuator Constants.
-PIN_LA_IN   = "P8_10"		# Pin for Input PWM from RC Controller.
-PIN_LA_ENA  = "P8_13"		# Pin for Output High Enable Signal.
-PIN_LA_OUT1 = "P8_11"		# Pin for Output High/Low to Driver CH1.
-PIN_LA_OUT2 = "P8_9"		# Pin for Output High/Low to Driver CH2.
+PIN_LA_IN  =  "P8_10"		# Pin for Input PWM from RC Controller.
+PIN_LA_ENA =  "P8_13"		# Pin for Output-High Enable Signal.
+PIN_LA_OUT = ["P8_11",		# Pin for Output to Driver CH1.
+			  "P8_9"]		# Pin for Output to Driver CH2.
 
 LA_STROKE_MAX    = 2		# Maximum stroke length [inch].
-LA_STROKE_TARGET = 1.5		# Target stroke length [inch].
+LA_STROKE_TARGET = 1.25		# Target stroke length [inch].
 
 # Carousel Stepper Constants.
-PIN_CS_IN = "P8_20"			# Pin for Input PWM from RC Controller.
-# TODO: Define Pins
+PIN_CS_IN  =  "P8_20"		# Pin for Input PWM from RC Controller.
+PIN_CS_VCC =  "P8_27"		# Pin for Supply Voltage.
+PIN_CS_OUT = ["P8_25",		# Pin for Output to Phase A Switch 1.
+			  "P8_23",		# Pin for Output to Phase A Switch 2.
+			  "P8_21",		# Pin for Output to Phase B Switch 1.
+			  "P8_19"]		# Pin for Output to Phase B Switch 2.
+
+CS_GRIPPER_NUM = 20			# Number of Grippers on ROV.
 
 # Shoulder Stepper Constants.
-PIN_SS_IN = "P8_30"			# Pin for Input PWM from RC Controller.
-# TODO: Define Pins
+PIN_SS_IN  =  "P8_30"		# Pin for Input PWM from RC Controller.
+PIN_SS_VCC =  "P8_37"		# Pin for Supply Voltage.
+PIN_SS_OUT = ["P8_35",		# Pin for Output to Phase A Switch 1.
+			  "P8_33",		# Pin for Output to Phase A Switch 2.
+			  "P8_31",		# Pin for Output to Phase B Switch 1.
+			  "P8_29"]		# Pin for Output to Phase B Switch 2.
 
 # Pressure Transducer Constants.
 PIN_PT_IN  = "P9_39"		# Pin for Input Data from Transducer.
@@ -67,38 +77,31 @@ def main():
 		N/A
 	"""
 	#
-	# Initialize Pins.
+	# Initialize Hardware.
 	#
+	
+	# Linear Actuator.
 	GPIO.setup(PIN_LA_IN, GPIO.IN)
 	GPIO.setup(PIN_LA_ENA, GPIO.OUT)
-	GPIO.setup(PIN_LA_OUT1, GPIO.OUT)
-	GPIO.setup(PIN_LA_OUT2, GPIO.OUT)
-	
-	GPIO.setup(PIN_CS_IN, GPIO.IN)
-	# TODO: Continue with remaining Pins.
-	
-	GPIO.setup(PIN_SS_IN, GPIO.IN)
-	# TODO: Continue with remaining Pins.
-	
-	ADC.setup()
-	
-	#
-	# Set Hardware to default States.
-	#
-	
-	# Linear Actuator: Default to maximum extent.
+	for __col in range(len(PIN_LA_OUT))
+		GPIO.setup(PIN_LA_OUT[__col], GPIO.OUT)
 	GPIO.output(PIN_LA_ENA, GPIO.HIGH)
-	GPIO.output(PIN_LA_OUT1, GPIO.HIGH)
-	GPIO.output(PIN_LA_OUT2, GPIO.LOW)
 	
-	# Carousel Stepper: Hold current position.
-	# TODO
+	# Carousel Stepper.
+	GPIO.setup(PIN_CS_IN, GPIO.IN)
+	GPIO.setup(PIN_CS_VCC, GPIO.OUT)
+	for __col in range(len(PIN_CS_OUT))
+		GPIO.setup(PIN_CS_OUT[__col], GPIO.OUT)
 	
-	# Shoulder Stepper: Hold current position.
-	# TODO
+	# Shoulder Stepper.
+	GPIO.setup(PIN_SS_IN, GPIO.IN)
+	GPIO.setup(PIN_SS_VCC, GPIO.OUT)
+	for __col in range(len(PIN_SS_OUT))
+		GPIO.setup(PIN_SS_OUT[__col], GPIO.OUT)
 	
-	# Pressure Transducer: Open file for data-logging.
-	# TODO(Giles)
+	# Pressure Transducer.
+	ADC.setup()
+	# TODO(Giles): Continue Pressure Transducer Initialization.
 	
 	#
 	# Initialize Variables.
@@ -110,17 +113,17 @@ def main():
 	ss_avg = 0.0
 	
 	# Position Commands.
-	la_cmd = 0
 	la_cmd_hist = deque(POS_HIST_NUM)
 	la_trend = 0
 	
-	cs_cmd = 0
 	cs_cmd_hist = deque(POS_HIST_NUM)
 	cs_trend = 0
 	
-	ss_cmd = 0
 	ss_cmd_hist = deque(POS_HIST_NUM)
 	ss_trend = 0
+	
+	# Shoulder Stepper: Step sequence counter.
+	ss_step = 0
 	
 	#
 	# Main program polling loop.
@@ -135,10 +138,9 @@ def main():
 			PIN_LA_IN, PWM_AVG_NUM, PWM_WID_FREQ)
 		
 		# Add new Position Command to History.
-		la_cmd = SRS.set_position(
+		la_cmd_hist.append(SRS.set_position(
 			la_avg,
-			PWM_WID_FREQ, PWM_WID_MAX, PWM_WID_MIN, PWM_WID_TOL)
-		la_cmd_hist.append(la_cmd)
+			PWM_WID_FREQ, PWM_WID_MAX, PWM_WID_MIN, PWM_WID_TOL))
 		
 		# Check for Position Command Persistance.
 		la_trend = SRS.check_trend(
@@ -148,20 +150,54 @@ def main():
 		# Process Position Command.
 		SRS.move_linear(
 			la_trend,
-			POS_HIST_NUM, PIN_LA_OUT1, PIN_LA_OUT2,
-			(LA_STROKE_TARGET/LA_STROKE_MAX))
+			PIN_LA_OUT, (LA_STROKE_TARGET/LA_STROKE_MAX))
 		
 		#
 		# Carousel Stepper polling.
 		#
 		
-		# TODO
+		# Determine Average Pulse Width.
+		cs_avg = SRS.calc_width(
+			PIN_CS_IN, PWM_AVG_NUM, PWM_WID_FREQ)
+		
+		# Add new Position Command to History.
+		cs_cmd_hist.append(SRS.set_position(
+			cs_avg,
+			PWM_WID_FREQ, PWM_WID_MAX, PWM_WID_MIN, PWM_WID_TOL))
+		
+		# Check for Position Command Persistance.
+		cs_trend = SRS.check_trend(
+			cs_cmd_hist,
+			POS_HIST_NUM)
+		
+		# Process Position Command.
+		SRS.move_carousel(
+			cs_trend,
+			PIN_CS_OUT, (1/CS_GRIPPER_NUM))
 		
 		#
 		# Shoulder Stepper polling.
 		#
 		
-		# TODO
+		# Determine Average Pulse Width.
+		ss_avg = SRS.calc_width(
+			PIN_SS_IN, PWM_AVG_NUM, PWM_WID_FREQ)
+		
+		# Add new Position Command to History.
+		ss_cmd_hist.append(SRS.set_position(
+			ss_avg,
+			PWM_WID_FREQ, PWM_WID_MAX, PWM_WID_MIN, PWM_WID_TOL))
+		
+		# Check for Position Command Persistance.
+		ss_trend = SRS.check_trend(
+			ss_cmd_hist,
+			POS_HIST_NUM)
+		
+		# Process Position Command.
+		ss_step = SRS.move_stepper(
+			ss_trend,
+			PIN_SS_OUT,
+			ss_step)
 		
 		#
 		# Pressure Transducer polling.

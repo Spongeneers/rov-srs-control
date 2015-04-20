@@ -25,9 +25,24 @@ import Adafruit_BBIO.PWM as PWM
 #
 
 # Hardware-related Constants.
-LA_STROKE_TIME = 2		# Firgelli L16-P: Full stroke time [sec].
+LA_STROKE_TIME = 1.6	# Firgelli L16-P: Full stroke time [sec].
 CS_STEP_ANGLE = 1.8		# Soyo Unipolar: Step Angle [degrees].
 SS_STEP_ANGLE = 1.8		# Soyo Unipolar: Step Angle [degrees].
+
+# Command Library for Linear Actuator.
+LA_COMMANDS = [[GPIO.HIGH, GPIO.LOW],		# Extend Actuator.
+			   [GPIO.LOW, GPIO.LOW],		# Hold Actuator.
+			   [GPIO.LOW, GPIO.HIGH]]		# Retract Actuator.
+
+# Half-stepping command sequence for Two-Phase Unipolar Steppers.
+STEP_SEQUENCE = [[GPIO.HIGH, GPIO.LOW, GPIO.LOW, GPIO.LOW],
+				 [GPIO.HIGH, GPIO.LOW, GPIO.HIGH, GPIO.LOW],
+				 [GPIO.LOW, GPIO.LOW, GPIO.HIGH, GPIO.LOW],
+				 [GPIO.LOW, GPIO.HIGH, GPIO.HIGH, GPIO.LOW],
+				 [GPIO.LOW, GPIO.HIGH, GPIO.LOW, GPIO.LOW],
+				 [GPIO.LOW, GPIO.HIGH, GPIO.LOW, GPIO.HIGH],
+				 [GPIO.LOW, GPIO.LOW, GPIO.LOW, GPIO.HIGH],
+				 [GPIO.HIGH, GPIO.LOW, GPIO.LOW, GPIO.HIGH]]
 
 def calc_width(pin, size, freq):
 	"""Calculate the Pulse Width of a PWM input signal.
@@ -168,7 +183,7 @@ def check_trend(hist, length):
 	
 	return trend
 	
-def move_linear(cmd, out1, out2, stroke):
+def move_linear(cmd, out, stroke):
 	"""Move the Linear Actuator to match the desired Position Command.
 	
 	This function changes the Position of the Linear Actuator in
@@ -180,33 +195,35 @@ def move_linear(cmd, out1, out2, stroke):
 					1  == Lock current Position.
 					0  == Extend Linear Actuator (Close Gripper).
 					-1 == Error
-		out1:		A String specifying the pin name on which the Extend
-					output signal should be sent.
-		out2:		A String specifying	the pin name on which the Retract
-					output signal should be sent.
+		out:		An Array of Strings specifying the pin names on which 
+					the output signals should be sent.
 		stroke:		A Float specifying the stroke fraction desired for
 					the shaft movement.
 	
 	Returns:
 		N/A
 	"""
-	if cmd is 2
-		# Retract Linear Actuator for specific amount of time.
-		GPIO.output(out1, GPIO.LOW)
-		GPIO.output(out2, GPIO.HIGH)
-		time.sleep(LA_STROKE_TIME*stroke)
-	elif cmd is 0
-		# Extend Linear Actuator for full amount of time.
-		GPIO.output(out1, GPIO.HIGH)
-		GPIO.output(out2, GPIO.LOW)
-		time.sleep(LA_STROKE_TIME)
-	# TODO(Jonathan): Error handling.
+	if cmd is 2 or cmd is 0
+		# Begin Linear Actuator motion.
+		for __col in range(len(out))
+			GPIO.output(out(__col), LA_COMMANDS[__col][cmd])
+
+		if cmd is 2
+			# Retract Linear Actuator for specific amount of time.
+			time.sleep(LA_STROKE_TIME*stroke)
+		elif cmd is 0
+			# Extend Linear Actuator for full amount of time.
+			time.sleep(LA_STROKE_TIME)
+
+	elif cmd is -1
+		# TODO(Jonathan): Error handling.
+		pass
 
 	# Hold Linear Actuator at desired Position.
-	GPIO.output(out1, GPIO.LOW)
-	GPIO.output(out2, GPIO.LOW)
+	for __index in range(len(out))
+		GPIO.output(out(__index), GPIO.LOW)
 	
-def move_carousel(cmd, out1, out2, out3, out4, angle):
+def move_carousel(cmd, out, angle):
 	"""Move the Carousel Stepper to match the desired Position Command.
 	
 	This function changes the Position of the Carousel Stepper in
@@ -218,23 +235,39 @@ def move_carousel(cmd, out1, out2, out3, out4, angle):
 					1  == Lock current Position.
 					0  == Lock current Position.
 					-1 == Error.
-		out1:		A String specifying the pin name on which the Phase A
-					Switch 1 signal should be sent.
-		out2:		A String specifying	the pin name on which the Phase A
-					Switch 2 signal should be sent.
-		out3:		A String specifying the pin name on which the Phase B
-					Switch 1 signal should be sent.
-		out4:		A String specifying	the pin name on which the Phase B
-					Switch 2 signal should be sent.
+		out:		An Array of Strings specifying the pin names on which 
+					the output signals should be sent.
 		angle:		A Float specifying the circle fraction desired for
 					the shaft rotation.
 	
 	Returns:
 		N/A
 	"""
-	# TODO(Jonathan)
+	if cmd is 2
+		# Calculate required number of half-steps.
+		__path_steps = (angle*360)/(CS_STEP_ANGLE/2)
+	
+		# Rotate Carousel Stepper to specific angle.
+		for __row in range(__path_steps)
+			# Determine next command in step sequence to issue.
+			__step = __row
+			while __step >= len(STEP_SEQUENCE)
+				__step -= len(STEP_SEQUENCE)
+			
+			# Set pin voltages to correspond to sequence.
+			for __col in range(len(out))
+				GPIO.output(out[__col], STEP_SEQUENCE[__col][__step])
+				
+	elif cmd is -1
+		# TODO(Jonathan): Error handling.
+		pass
+		
+	else
+		# Hold Carousel Stepper at desired Position.
+		for __index in range(len(out))
+			GPIO.output(out[__index], GPIO.LOW)
 
-def move_shoulder(cmd, out1, out2, out3, out4, step):
+def move_shoulder(cmd, out, step):
 	"""Move the Shoulder Stepper to match the desired Position Command.
 	
 	This function changes the Position of the Shoulder Stepper in
@@ -246,21 +279,44 @@ def move_shoulder(cmd, out1, out2, out3, out4, step):
 					1  == Lock current Position.
 					0  == Step Counter-Clockwise (Tilt Up).
 					-1 == Error.
-		out1:		A String specifying the pin name on which the Phase A
-					Switch 1 signal should be sent.
-		out2:		A String specifying	the pin name on which the Phase A
-					Switch 2 signal should be sent.
-		out3:		A String specifying the pin name on which the Phase B
-					Switch 1 signal should be sent.
-		out4:		A String specifying	the pin name on which the Phase B
-					Switch 2 signal should be sent.
-		step:		An Integer specifying the next Phase sequence for
-					continued rotation.
+		out:		An Array of Strings specifying the pin names on which 
+					the output signals should be sent.
+		step:		An Integer specifying the Phase sequence to be
+					executed.
 	
 	Returns:
-		N/A
+		next:		An Integer specifying the next Phase sequence for
+					continued rotation.
 	"""
-	# TODO(Jonathan)
+	# Determine command in step sequence to issue.
+	while step >= len(STEP_SEQUENCE)
+		step -= len(STEP_SEQUENCE)
+	while step < 0
+		step += len(STEP_SEQUENCE)
+
+	next = step
+	
+	if cmd is 2 or cmd is 0
+		# Advance Shoulder Stepper one step.
+		for __col in range(len(out))
+			GPIO.output(out[__col], STEP_SEQUENCE[__col][step])
+		
+		# Set next step sequence based on direction of rotation.
+		if cmd is 2
+			next += 1
+		elif cmd is 0
+			next -= 1
+		
+	elif cmd is -1
+		# TODO(Jonathan): Error handling.
+		pass
+	
+	else
+		# Hold Shoulder Stepper at desired Position.
+		for __index in range(len(out))
+			GPIO.output(out[__index], GPIO.LOW)
+	
+	return next
 	
 def setup_logfile(name):
     """Create File for data logging.
