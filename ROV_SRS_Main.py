@@ -83,20 +83,20 @@ def main():
 	# Linear Actuator.
 	GPIO.setup(PIN_LA_IN, GPIO.IN)
 	GPIO.setup(PIN_LA_ENA, GPIO.OUT)
-	for __col in range(len(PIN_LA_OUT))
+	for __col in range(len(PIN_LA_OUT)):
 		GPIO.setup(PIN_LA_OUT[__col], GPIO.OUT)
 	GPIO.output(PIN_LA_ENA, GPIO.HIGH)
 	
 	# Carousel Stepper.
 	GPIO.setup(PIN_CS_IN, GPIO.IN)
 	GPIO.setup(PIN_CS_VCC, GPIO.OUT)
-	for __col in range(len(PIN_CS_OUT))
+	for __col in range(len(PIN_CS_OUT)):
 		GPIO.setup(PIN_CS_OUT[__col], GPIO.OUT)
 	
 	# Shoulder Stepper.
 	GPIO.setup(PIN_SS_IN, GPIO.IN)
 	GPIO.setup(PIN_SS_VCC, GPIO.OUT)
-	for __col in range(len(PIN_SS_OUT))
+	for __col in range(len(PIN_SS_OUT)):
 		GPIO.setup(PIN_SS_OUT[__col], GPIO.OUT)
 	
 	# Pressure Transducer.
