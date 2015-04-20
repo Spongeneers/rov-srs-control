@@ -68,7 +68,7 @@ def calc_width(pin, size, freq):
 	__fall_flag = 0.0
 	__pulse_width = 0.0
 	
-	for i in range(size)
+	for i in range(size):
 		# Determine incoming signal Pulse Width.
 		GPIO.wait_for_edge(pin, GPIO.RISING)
 		__rise_flag = time.time()
@@ -79,7 +79,7 @@ def calc_width(pin, size, freq):
 		# Adjust for missed Pulses (CPU busy during Edge event).
 		# This is done by subtracting the PWM period value if the
 		# measured pulse width is found to be greater than the period.
-		while __pulse_width > (1/freq)
+		while __pulse_width > (1/freq):
 			__pulse_width -= (1/freq)
 		
 		avg += __pulse_width
@@ -125,13 +125,13 @@ def set_position(width, freq, max, min, tol):
 	__pwm_width_tol = (__pwm_width_max - __pwm_width_min)*(tol/100)
 	
 	# Check absolute maximum allowable value.
-	if width < (__pwm_width_max + __pwm_width_tol)
+	if width < (__pwm_width_max + __pwm_width_tol):
 		# Check against multiple minimum values.
-		if width >= (__pwm_width_max - __pwm_width_tol)
+		if width >= (__pwm_width_max - __pwm_width_tol):
 			cmd = 2
-		elif width >= (__pwm_width_min + __pwm_width_tol)
+		elif width >= (__pwm_width_min + __pwm_width_tol):
 			cmd = 1
-		elif width >= (__pwm_width_min - __pwm_width_tol)
+		elif width >= (__pwm_width_min - __pwm_width_tol):
 			cmd = 0
 	
 	return cmd
@@ -164,21 +164,21 @@ def check_trend(hist, length):
 	__end_index = length
 	
 	# Check for duration of oldest Command.
-	while __start_flag is True and __start_index < length
-		if hist[__start_index] is hist[0]
+	while __start_flag is True and __start_index < length:
+		if hist[__start_index] is hist[0]:
 			__start_index += 1
-		else
+		else:
 			__start_flag = False
 	
 	# Check for duration of newest Command.
-	while __end_flag is True and __end_index >= 0
-		if hist[__end_index] is hist[length]
+	while __end_flag is True and __end_index >= 0:
+		if hist[__end_index] is hist[length]:
 			__end_index -= 1
-		else
+		else:
 			__end_flag = False
 			
 	# Check for 50/50 command split.
-	if start_flag is True and end_flag is True
+	if start_flag is True and end_flag is True:
 		trend = hist[length]
 	
 	return trend
@@ -203,24 +203,24 @@ def move_linear(cmd, out, stroke):
 	Returns:
 		N/A
 	"""
-	if cmd is 2 or cmd is 0
+	if cmd is 2 or cmd is 0:
 		# Begin Linear Actuator motion.
-		for __col in range(len(out))
+		for __col in range(len(out)):
 			GPIO.output(out(__col), LA_COMMANDS[__col][cmd])
 
-		if cmd is 2
+		if cmd is 2:
 			# Retract Linear Actuator for specific amount of time.
 			time.sleep(LA_STROKE_TIME*stroke)
-		elif cmd is 0
+		elif cmd is 0:
 			# Extend Linear Actuator for full amount of time.
 			time.sleep(LA_STROKE_TIME)
 
-	elif cmd is -1
+	elif cmd is -1:
 		# TODO(Jonathan): Error handling.
 		pass
 
 	# Hold Linear Actuator at desired Position.
-	for __index in range(len(out))
+	for __index in range(len(out)):
 		GPIO.output(out(__index), GPIO.LOW)
 	
 def move_carousel(cmd, out, angle):
@@ -243,28 +243,28 @@ def move_carousel(cmd, out, angle):
 	Returns:
 		N/A
 	"""
-	if cmd is 2
+	if cmd is 2:
 		# Calculate required number of half-steps.
 		__path_steps = (angle*360)/(CS_STEP_ANGLE/2)
 	
 		# Rotate Carousel Stepper to specific angle.
-		for __row in range(__path_steps)
+		for __row in range(__path_steps):
 			# Determine next command in step sequence to issue.
 			__step = __row
-			while __step >= len(STEP_SEQUENCE)
+			while __step >= len(STEP_SEQUENCE):
 				__step -= len(STEP_SEQUENCE)
 			
 			# Set pin voltages to correspond to sequence.
-			for __col in range(len(out))
+			for __col in range(len(out)):
 				GPIO.output(out[__col], STEP_SEQUENCE[__col][__step])
 				
-	elif cmd is -1
+	elif cmd is -1:
 		# TODO(Jonathan): Error handling.
 		pass
 		
-	else
+	else:
 		# Hold Carousel Stepper at desired Position.
-		for __index in range(len(out))
+		for __index in range(len(out)):
 			GPIO.output(out[__index], GPIO.LOW)
 
 def move_shoulder(cmd, out, step):
@@ -289,31 +289,31 @@ def move_shoulder(cmd, out, step):
 					continued rotation.
 	"""
 	# Determine command in step sequence to issue.
-	while step >= len(STEP_SEQUENCE)
+	while step >= len(STEP_SEQUENCE):
 		step -= len(STEP_SEQUENCE)
-	while step < 0
+	while step < 0:
 		step += len(STEP_SEQUENCE)
 
 	next = step
 	
-	if cmd is 2 or cmd is 0
+	if cmd is 2 or cmd is 0:
 		# Advance Shoulder Stepper one step.
-		for __col in range(len(out))
+		for __col in range(len(out)):
 			GPIO.output(out[__col], STEP_SEQUENCE[__col][step])
 		
 		# Set next step sequence based on direction of rotation.
-		if cmd is 2
+		if cmd is 2:
 			next += 1
-		elif cmd is 0
+		elif cmd is 0:
 			next -= 1
 		
-	elif cmd is -1
+	elif cmd is -1:
 		# TODO(Jonathan): Error handling.
 		pass
 	
-	else
+	else:
 		# Hold Shoulder Stepper at desired Position.
-		for __index in range(len(out))
+		for __index in range(len(out)):
 			GPIO.output(out[__index], GPIO.LOW)
 	
 	return next
