@@ -5,394 +5,364 @@
 # ROV_SRS_Library
 #
 #
-# Overview:	A collection of helper functions used by the BeagleBone Black
-#		to control the ROV SRS Actuators.
+# Overview: A collection of helper functions used by the BeagleBone Black
+#     to control the ROV SRS Actuators.
 #
-# Authors:	Giles Fernandes, Jonathan Lee
+# Authors:  Giles Fernandes, Jonathan Lee
 #
 
-from datetime import datetime
 from collections import deque
+from datetime import datetime
 import sys
 import time
 
 from Adafruit_BBIO import ADC
 from Adafruit_BBIO import GPIO
-from Adafruit_BBIO import PWM
 
 #
 # Constant Definitions.
 #
 
 # Hardware-related Constants.
-LA_STROKE_TIME = 1.6	# Firgelli L16-P: Full stroke time [sec].
-CS_STEP_ANGLE = 1.8		# Soyo Unipolar: Step Angle [degrees].
-SS_STEP_ANGLE = 1.8		# Soyo Unipolar: Step Angle [degrees].
+LA_MAX_STROKE = 2.0     # Firgelli L16-P: Max Stroke length [inch].
+CS_STEP_ANGLE = 1.8     # Soyo Unipolar: Step Angle [degrees].
+SS_STEP_ANGLE = 1.8     # Soyo Unipolar: Step Angle [degrees].
 
 # Command Library for Linear Actuator.
-LA_COMMANDS = [[GPIO.HIGH, GPIO.LOW],		# Extend Actuator.
-			   [GPIO.LOW, GPIO.LOW],		# Hold Actuator.
-			   [GPIO.LOW, GPIO.HIGH]]		# Retract Actuator.
+LA_COMMANDS = [[GPIO.HIGH, GPIO.LOW],     # Extend Actuator.
+               [GPIO.LOW, GPIO.LOW],      # Hold Actuator.
+               [GPIO.LOW, GPIO.HIGH]]     # Retract Actuator.
 
-# Half-stepping command sequence for Two-Phase Unipolar Steppers.
-STEP_SEQUENCE = [[GPIO.HIGH, GPIO.LOW, GPIO.LOW, GPIO.LOW],
-				 [GPIO.HIGH, GPIO.LOW, GPIO.HIGH, GPIO.LOW],
-				 [GPIO.LOW, GPIO.LOW, GPIO.HIGH, GPIO.LOW],
-				 [GPIO.LOW, GPIO.HIGH, GPIO.HIGH, GPIO.LOW],
-				 [GPIO.LOW, GPIO.HIGH, GPIO.LOW, GPIO.LOW],
-				 [GPIO.LOW, GPIO.HIGH, GPIO.LOW, GPIO.HIGH],
-				 [GPIO.LOW, GPIO.LOW, GPIO.LOW, GPIO.HIGH],
-				 [GPIO.HIGH, GPIO.LOW, GPIO.LOW, GPIO.HIGH]]
+# Command Library for Carousel Stepper.
+CS_COMMANDS = [[GPIO.LOW, GPIO.LOW],      # Hold Stepper in place.
+               [GPIO.LOW, GPIO.LOW],      # Hold Stepper in place.
+               [GPIO.HIGH, GPIO.HIGH]]    # Take one Step CW.
+
+# Command Library for Shoulder Stepper.
+SS_COMMANDS = [[GPIO.LOW, GPIO.HIGH],     # Take one Step CCW.
+               [GPIO.LOW, GPIO.LOW],      # Hold Stepper in place.
+               [GPIO.HIGH, GPIO.HIGH]]    # Take one Step CW
 
 def calc_width(pin, size, freq):
-	"""Calculate the Pulse Width of a PWM input signal.
+    """Calculate the Pulse Width of a PWM input signal.
 
-	This function stores the time of day on a Rising Edge and subsequent 
-	Falling Edge event, calculates the average of multiple such events, 
-	and returns the difference in milliseconds. Function will halt if run 
-	on 0 or 100% Duty Cycle signals.
+    This function stores the time of day on a Rising Edge and subsequent 
+    Falling Edge event, calculates the average of multiple such events, 
+    and returns the difference in milliseconds. Function will halt if run 
+    on 0 or 100% Duty Cycle signals.
 
-	Args:
-		pin:		A String specifying the pin name on which the PWM 
-					signal is expected. The pin name should be in the 
-					format defined by the Adafruit_BBIO library.
-		size:		An Integer specifying the sample size.
-		freq:		A float specifying the expected frequency of 
-					the PWM signal [Hz].
-	
-	Returns:
-		avg:		The calculated Pulse Width [milliseconds].
-	"""
-	avg = 0.0
-	__rise_flag = 0.0
-	__fall_flag = 0.0
-	__pulse_width = 0.0
+    Args:
+        pin:        A String specifying the pin name on which the PWM 
+                    signal is expected. The pin name should be in the 
+                    format defined by the Adafruit_BBIO library.
+        size:       An Integer specifying the sample size.
+        freq:       A float specifying the expected frequency of 
+                    the PWM signal [Hz].
 
-	for i in range(size):
-		# Determine incoming signal Pulse Width.
-		GPIO.wait_for_edge(pin, GPIO.RISING)
-		__rise_flag = time.time()
-		GPIO.wait_for_edge(pin, GPIO.FALLING)
-		__fall_flag = time.time()
-		__pulse_width = __fall_flag - __rise_flag
-		
-		# Adjust for missed Pulses (CPU busy during Edge event).
-		# This is done by subtracting the PWM period value if the
-		# measured pulse width is found to be greater than the period.
-		
-		while __pulse_width >= (1/freq):
-			__pulse_width -= (1/freq)
-		avg += __pulse_width
-	
-	avg /= size
+    Returns:
+        avg:        The calculated Pulse Width [milliseconds].
+    """
+    avg = 0.0
+    __rise_flag = 0.0
+    __fall_flag = 0.0
+    __pulse_width = 0.0
 
-	# DEBUG:
-	print 'Pulse Width: {}'.format(avg)
+    for i in range(size):
+        # Determine incoming signal Pulse Width.
+        GPIO.wait_for_edge(pin, GPIO.RISING)
+        __rise_flag = time.time()
+        GPIO.wait_for_edge(pin, GPIO.FALLING)
+        __fall_flag = time.time()
+        __pulse_width = __fall_flag - __rise_flag
 
-	return avg
+        # Adjust for missed Pulses (CPU busy during Edge event).
+        # This is done by subtracting the PWM period value if the
+        # measured pulse width is found to be greater than the period.
+
+        while __pulse_width >= (1/freq):
+            __pulse_width -= (1/freq)
+        avg += __pulse_width
+
+    avg /= size
+
+    return avg
 
 def set_position(width, freq, max, min, tol):
-	"""Set the Position Command corresponding to a PWM Pulse Width.
-	
-	This function checks if the Pulse Width value provided falls within
-	the tolerance range of the expected maximum or minimum Pulse Width
-	values and returns the corresponding Position Command.
-	
-	Args:
-		width:		A Float specifying the measured Pulse Width
-					[milliseconds].
-		freq:		A Float specifying the expected frequency
-					of the PWM signal [Hz].
-		max:		A Float specifying the maximum expected
-					duty cycle of the PWM signal [%].
-		min:		A Float specifying the minimum expected
-					duty cycle of the PWM signal [%].
-		tol:		A Float specifying the acceptable tolerance
-					on deviations in the measured Pulse Width from
-					the expected values. The excepted values
-					correspond to the Pulse Widths of the maximum
-					and minimum expected duty cycle values specified
-					above. The tolerance is expressed relative to
-					the millisecond difference between the maximum 
-					and minimum possible Pulse Widths [%].
-	
-	Returns:
-		cmd:		The Position Command corresponding to the
-					measured Pulse Width.
-					2  == Maximum Pulse Width.
-					1  == Intermediate Pulse Width .
-					0  == Minimum Pulse Width.
-					-1 == Error.
-	"""
-	cmd = -1
-	__pwm_width_max = ((1/freq)*(max/100))
-	__pwm_width_min = ((1/freq)*(min/100))
-	__pwm_width_tol = (__pwm_width_max - __pwm_width_min)*(tol/100)
+    """Set the Position Command corresponding to a PWM Pulse Width.
 
-	# DEBUG:
-	print 'Max Width: {}'.format(__pwm_width_max)
-	print 'Min Width: {}'.format(__pwm_width_min)
-	print 'Tolerance: {}'.format(__pwm_width_tol)
-	
-	# Check absolute maximum allowable value.
-	if width < (__pwm_width_max + __pwm_width_tol):
-		# Check against multiple minimum values.
-		if width >= (__pwm_width_max - __pwm_width_tol):
-			cmd = 2
-		elif width >= (__pwm_width_min + __pwm_width_tol):
-			cmd = 1
-		elif width >= (__pwm_width_min - __pwm_width_tol):
-			cmd = 0
+    This function checks if the Pulse Width value provided falls within
+    the tolerance range of the expected maximum or minimum Pulse Width
+    values and returns the corresponding Position Command.
 
-	# DEBUG:
-	print 'Command: {}\n'.format(cmd)
-	
-	return cmd
+    Args:
+        width:      A Float specifying the measured Pulse Width
+                    [milliseconds].
+        freq:       A Float specifying the expected frequency
+                    of the PWM signal [Hz].
+        max:        A Float specifying the maximum expected
+                    duty cycle of the PWM signal [%].
+        min:        A Float specifying the minimum expected
+                    duty cycle of the PWM signal [%].
+        tol:        A Float specifying the acceptable tolerance
+                    on deviations in the measured Pulse Width from
+                    the expected values. The excepted values
+                    correspond to the Pulse Widths of the maximum
+                    and minimum expected duty cycle values specified
+                    above. The tolerance is expressed relative to
+                    the millisecond difference between the maximum 
+                    and minimum possible Pulse Widths [%].
 
-def check_trend(hist):
-	"""Check for Position Command persistance.
-	
-	This function returns the most recent in a series of Position
-	Commands if the series exhibits a 50/50 split between two different
-	types of Position Commands.
-	
-	Args:
-		hist:		A Deque containing the history of Position
-					Commands, which are themselves integers with
-					values between -1 and 2. Refer to function Returns
-					for further details.
-	
-	Returns:
-		trend:		The persistant value of the Command series 2nd half.
-					2  == Maximum Pulse Width.
-					1  == Intermediate Pulse Width.
-					0  == Minimum Pulse Width.
-					-1 == Error.
-	"""
-	trend = -1
-	__start_flag = True
-	__end_flag = True
-	__start_index = 0
-	__end_index = (len(hist) - 1)
+    Returns:
+        cmd:        The Position Command corresponding to the
+                    measured Pulse Width.
+                    2  == Maximum Pulse Width.
+                    1  == Intermediate Pulse Width .
+                    0  == Minimum Pulse Width.
+                    -1 == Error.
+    """
+    cmd = -1
+    __pwm_width_max = ((1/freq)*(max/100))
+    __pwm_width_min = ((1/freq)*(min/100))
+    __pwm_width_tol = (__pwm_width_max - __pwm_width_min)*(tol/100)
 
-	# Check for duration of oldest Command.
-	while __start_flag is True and __start_index < len(hist):
-		if hist[__start_index] is hist[0]:
-			__start_index += 1
-		else:
-			__start_flag = False
-	
-	# Check for duration of newest Command.
-	while __end_flag is True and __end_index >= 0:
-		if hist[__end_index] is hist[len(hist) - 1]:
-			__end_index -= 1
-		else:
-			__end_flag = False
-			
-	# Check for 50/50 command split.
-	if __start_flag is True and __end_flag is True:
-		trend = hist[len(hist) - 1]
-	
-	return trend
-	
-def move_linear(cmd, out, stroke):
-	"""Move the Linear Actuator to match the desired Position Command.
-	
-	This function changes the Position of the Linear Actuator in
-	accordance with the input Position Command.
-	
-	Args:
-		cmd:		The Position Command to enact.
-					2  == Retract Linear Actuator (Open Gripper).
-					1  == Lock current Position.
-					0  == Extend Linear Actuator (Close Gripper).
-					-1 == Error
-		out:		An Array of Strings specifying the pin names on which 
-					the output signals should be sent.
-		stroke:		A Float specifying the stroke fraction desired for
-					the shaft movement.
-	
-	Returns:
-		N/A
-	"""
-	if cmd is 2 or cmd is 0:
-		# Begin Linear Actuator motion.
-		for __col in range(len(out)):
-			GPIO.output(out[__col], LA_COMMANDS[__col][cmd])
+    # Check absolute maximum allowable value.
+    if width < (__pwm_width_max + __pwm_width_tol):
+        # Check against multiple minimum values.
+        if width >= (__pwm_width_max - __pwm_width_tol):
+            cmd = 2
+        elif width >= (__pwm_width_min + __pwm_width_tol):
+            cmd = 1
+        elif width >= (__pwm_width_min - __pwm_width_tol):
+            cmd = 0
 
-		if cmd is 2:
-			# Retract Linear Actuator for specific amount of time.
-			time.sleep(LA_STROKE_TIME*stroke)
-		elif cmd is 0:
-			# Extend Linear Actuator for full amount of time.
-			time.sleep(LA_STROKE_TIME)
+    return cmd
 
-	elif cmd is -1:
-		# TODO(Jonathan): Error handling.
-		pass
+def check_trend(hist, cont):
+    """Check for Position Command persistance.
 
-	# Hold Linear Actuator at desired Position.
-	for __index in range(len(out)):
-		GPIO.output(out[__index], GPIO.LOW)
-	
-def move_carousel(cmd, out, angle):
-	"""Move the Carousel Stepper to match the desired Position Command.
-	
-	This function changes the Position of the Carousel Stepper in
-	accordance with the input Position Command.
-	
-	Args:
-		cmd:		The Position Command to enact.
-					2  == Advance Carousel Stepper (Change Gripper).
-					1  == Lock current Position.
-					0  == Lock current Position.
-					-1 == Error.
-		out:		An Array of Strings specifying the pin names on which 
-					the output signals should be sent.
-		angle:		A Float specifying the circle fraction desired for
-					the shaft rotation.
-	
-	Returns:
-		N/A
-	"""
-	if cmd is 2:
-		# Calculate required number of half-steps.
-		__path_steps = (angle*360)/(CS_STEP_ANGLE/2)
-	
-		# Rotate Carousel Stepper to specific angle.
-		for __row in range(__path_steps):
-			# Determine next command in step sequence to issue.
-			__step = __row
-			while __step >= len(STEP_SEQUENCE):
-				__step -= len(STEP_SEQUENCE)
-			
-			# Set pin voltages to correspond to sequence.
-			for __col in range(len(out)):
-				GPIO.output(out[__col], STEP_SEQUENCE[__col][__step])
-				
-	elif cmd is -1:
-		# TODO(Jonathan): Error handling.
-		pass
-		
-	else:
-		# Hold Carousel Stepper at desired Position.
-		for __index in range(len(out)):
-			GPIO.output(out[__index], GPIO.LOW)
+    This function returns the most recent in a series of Position
+    Commands if the series exhibits the desired trend. Valid trends
+    include a 50/50 split between two Command types or a continuous 
+    sequence of one command type.
 
-def move_shoulder(cmd, out, step):
-	"""Move the Shoulder Stepper to match the desired Position Command.
-	
-	This function changes the Position of the Shoulder Stepper in
-	accordance with the input Position Command.
-	
-	Args:
-		cmd:		The Position Command to enact.
-					2  == Step Clockwise (Tilt Down).
-					1  == Lock current Position.
-					0  == Step Counter-Clockwise (Tilt Up).
-					-1 == Error.
-		out:		An Array of Strings specifying the pin names on which 
-					the output signals should be sent.
-		step:		An Integer specifying the Phase sequence to be
-					executed.
-	
-	Returns:
-		next:		An Integer specifying the next Phase sequence for
-					continued rotation.
-	"""
-	# Determine command in step sequence to issue.
-	while step >= len(STEP_SEQUENCE):
-		step -= len(STEP_SEQUENCE)
-	while step < 0:
-		step += len(STEP_SEQUENCE)
+    Args:
+        hist:       A Deque containing the history of Position
+                    Commands, which are themselves integers with
+                    values between -1 and 2. Refer to function Returns
+                    for further details.
+        cont:       A Boolean indicating whether a continuous command
+                    sequence is expected.
+                    True == Check for Continuous Command sequence.
+                    False == Check for 50/50 Command sequence.
 
-	next = step
-	
-	if cmd is 2 or cmd is 0:
-		# Advance Shoulder Stepper one step.
-		for __col in range(len(out)):
-			GPIO.output(out[__col], STEP_SEQUENCE[__col][step])
-		
-		# Set next step sequence based on direction of rotation.
-		if cmd is 2:
-			next += 1
-		elif cmd is 0:
-			next -= 1
-		
-	elif cmd is -1:
-		# TODO(Jonathan): Error handling.
-		pass
-	
-	else:
-		# Hold Shoulder Stepper at desired Position.
-		for __index in range(len(out)):
-			GPIO.output(out[__index], GPIO.LOW)
-	
-	return next
-	
+    Returns:
+        trend:      The persistant value of the Command series 2nd half.
+                    2  == Maximum Pulse Width.
+                    1  == Intermediate Pulse Width.
+                    0  == Minimum Pulse Width.
+                    -1 == Error.
+    """
+    trend = -1
+    __start_flag = True
+    __end_flag = True
+    __start_index = 0
+    __end_index = (len(hist) - 1)
+
+    # Check for duration of oldest Command.
+    while __start_flag is True and __start_index < len(hist):
+        if hist[__start_index] is hist[0]:
+            __start_index += 1
+        else:
+            __start_flag = False
+
+    # Check for duration of newest Command.
+    while __end_flag is True and __end_index >= 0:
+        if hist[__end_index] is hist[len(hist) - 1]:
+            __end_index -= 1
+        else:
+            __end_flag = False
+
+    # Check for desired Command trend.
+    if (__start_flag or cont) is True and __end_flag is True:
+        trend = hist[len(hist) - 1]
+
+    return trend
+
+def move_linear(cmd, out, pot, stroke):
+    """Move the Linear Actuator to match the desired Position Command.
+
+    This function changes the Position of the Linear Actuator in
+    accordance with the input Position Command.
+
+    Args:
+        cmd:        The Position Command to enact.
+                    2  == Retract Linear Actuator (Open Gripper).
+                    1  == Lock current Position.
+                    0  == Extend Linear Actuator (Close Gripper).
+                    -1 == Error
+        out:        An Array of Strings specifying the pin names on which 
+                    the output signals should be sent.
+        pot:        A String specifying the pin name on which the input
+                    Potentiometer signal is expected.
+        stroke:     A Float specifying the stroke length desired for
+                    the shaft movement.
+
+    Returns:
+        N/A
+    """
+    __pot_pos = 0.0
+    __upper_lim = 1.0
+    __lower_lim = 1.0 - stroke/LA_MAX_STROKE
+
+	if cmd >= 0:
+        # Begin Linear Actuator motion.
+        for __col in range(len(out)):
+            GPIO.output(out[__col], LA_COMMANDS[__col][cmd])
+
+        # Check Potentiometer Signal.
+        if cmd is 2:
+            while __pot_pos > __lower_lim:
+                __pot_pos = ADC.read(pot)    # BUG: Adafruit_BBIO.ADC Library
+                __pot_pos = ADC.read(pot)    # requires two read operations to
+                                             # obtain updated values.
+        elif cmd is 0:
+            while __pot_pos < __upper_lim:
+                __pot_pos = ADC.read(pot)    # BUG: Adafruit_BBIO.ADC Library
+                __pot_pos = ADC.read(pot)    # requires two read operations to
+                                             # obtain updated values.
+
+    # Hold Linear Actuator at desired Position.
+    for __index in range(len(out)):
+        GPIO.output(out[__index], GPIO.LOW)
+
+def move_carousel(cmd, out, gripper):
+    """Move the Carousel Stepper to match the desired Position Command.
+
+    This function changes the Position of the Carousel Stepper in
+    accordance with the input Position Command.
+
+    Args:
+        cmd:        The Position Command to enact.
+                    2  == Advance Carousel Stepper (Change Gripper).
+                    1  == Lock current Position.
+                    0  == Lock current Position.
+                    -1 == Error.
+        out:        An Array of Strings specifying the pin names on which 
+                    the output signals should be sent.
+        gripper:    A Float specifying the number of grippers currently
+                    mounted on the Carousel.
+
+    Returns:
+        N/A
+    """
+    if cmd is 2:
+        # Calculate required number of Steps.
+        __path_steps = ((1/gripper)*360)/(CS_STEP_ANGLE)
+
+        # Loop over single-step command.
+        for __steps in range(__path_steps):
+            for __col in range((len(out))):
+                GPIO.output(out[__col], CS_COMMANDS[cmd][__col])
+            GPIO.output(out[1], GPIO.LOW)
+
+    else:
+        # Hold Carousel Stepper at desired Position.
+        for __index in range(len(out)):
+            GPIO.output(out[__index], GPIO.LOW)
+
+def move_shoulder(cmd, out):
+    """Move the Shoulder Stepper to match the desired Position Command.
+
+    This function changes the Position of the Shoulder Stepper in
+    accordance with the input Position Command.
+
+    Args:
+        cmd:        The Position Command to enact.
+                    2  == Step Clockwise (Tilt Down).
+                    1  == Lock current Position.
+                    0  == Step Counter-Clockwise (Tilt Up).
+                    -1 == Error.
+        out:        An Array of Strings specifying the pin names on which 
+                    the output signals should be sent.
+
+    Returns:
+        next:       An Integer specifying the next Phase sequence for
+                    continued rotation.
+    """
+    if cmd >= 0:
+        # Issue single Command (Step or Hold).
+        for __col in range((len(out))):
+            GPIO.output(out[__col], CS_COMMANDS[cmd][__col])
+        GPIO.output(out[1], GPIO.LOW)
+
+    else:
+        # Hold Shoulder Stepper at desired Position.
+        for __index in range(len(out)):
+            GPIO.output(out[__index], GPIO.LOW)
+
 def setup_logfile(name):
-	"""Create File for data logging.
+    """Create File for data logging.
 
-	This function creates a CSV file, appends the current date to the
-	filename, and opens the file for data recording.
+    This function creates a CSV file, appends the current date to the
+    filename, and opens the file for data recording.
 
-	Args:
-		name:		A String specifying the desired file name. The current
-					date will be appended to this string.
+    Args:
+        name:       A String specifying the desired file name. The current
+                    date will be appended to this string.
 
-	Returns:
-		N/A	
-	"""
-	__fmt = '%Y-%m-%d_{name}'
+    Returns:
+        N/A 
+    """
+    __fmt = '%Y-%m-%d_{name}'
 
-	# Create name with timestamp appended.
-	datename = datetime.datetime.now().strftime(__fmt).format(name = name)
+    # Create name with timestamp appended.
+    datename = datetime.datetime.now().strftime(__fmt).format(name = name)
 
-	# Open the file in write mode.
-	file = open(datename,'w')
+    # Open the file in write mode.
+    file = open(datename,'w')
 
 def read_pressure(pin):
-	"""Read the pressure sensor value.
+    """Read the pressure sensor value.
 
-	This function reads the analog input from the pressure sensor and 
-	returns the corresponding pressure differential value.
-	
-	Args:
-		pin:		A String specifying the pin name on which the 
-					pressure sensor signal is expected.
-	
-	Returns:
-		__diff:		The calculated pressure difference [psi].
-	"""
-	# Analog read voltage of the pressure differential sensor.
-	__diff = ADC.read_raw(pin)	
-	
-	# TODO(Giles): Map voltage value to pressure differential.	
-	
-	return __diff
-	
+    This function reads the analog input from the pressure sensor and 
+    returns the corresponding pressure differential value.
+
+    Args:
+        pin:        A String specifying the pin name on which the 
+                    pressure sensor signal is expected.
+
+    Returns:
+        __diff:     The calculated pressure difference [psi].
+    """
+    # Analog read voltage of the pressure differential sensor.
+    __diff = ADC.read_raw(pin)  
+
+    # TODO(Giles): Map voltage value to pressure differential.  
+
+    return __diff
+
 def log_pressure(pin, freq):
-	"""Log the pressure difference into the log file.
-	
-	This function reads the pressure from the sensor and writes a time 
-	stamp and pressure value to a CSV log file.
-	
-	Args:
-		pin:		A String specifying the pin name on which the 
-					pressure sensor signal is excepted.
-		freq:		An Integer specifying the desired logging 
-					frequency [Hz].
-	
-	Returns:
-		N/A	
-	"""
-	__diff = read_pressure(pin)
+    """Log the pressure difference into the log file.
 
-	# TODO(Giles): Check if memory has been filled.
-	# If memory has not been filled, write to file.
-	
-	# Log Format: Time,Pressure
-	file.write(datetime.now().strftime('%H:%M:%S'))
-	file.write("\t")
-	file.write(str(__diff))
-	file.write("\n")
+    This function reads the pressure from the sensor and writes a time 
+    stamp and pressure value to a CSV log file.
+
+    Args:
+        pin:        A String specifying the pin name on which the 
+                    pressure sensor signal is excepted.
+        freq:       An Integer specifying the desired logging 
+                    frequency [Hz].
+
+    Returns:
+        N/A 
+    """
+    __diff = read_pressure(pin)
+
+    # TODO(Giles): Check if memory has been filled.
+    # If memory has not been filled, write to file.
+
+    # Log Format: Time,Pressure
+    file.write(datetime.now().strftime('%H:%M:%S'))
+    file.write("\t")
+    file.write(str(__diff))
+    file.write("\n")
