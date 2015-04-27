@@ -163,69 +163,69 @@ def main():
         #
 
         # Determine Average Pulse Width.
-        cs_avg = SRS.get_width(
-            PIN_CS_IN, PWM_AVG_NUM, PWM_WID_FREQ,
-            PWM_WID_MAX, PWM_WID_MIN, PWM_WID_TOL)
+        #cs_avg = SRS.get_width(
+        #    PIN_CS_IN, PWM_AVG_NUM, PWM_WID_FREQ,
+        #    PWM_WID_MAX, PWM_WID_MIN, PWM_WID_TOL)
 
         # DEBUG:
-        print 'Carousel Pulse Width: {}'.format(cs_avg)
+        #print 'Carousel Pulse Width: {}'.format(cs_avg)
 
         # Add new Position Command to History.
-        cs_cmd = SRS.set_position(
-            cs_avg,
-            PWM_WID_FREQ, PWM_WID_MAX, PWM_WID_MIN, PWM_WID_TOL)
-        if cs_cmd is 1:
-            cs_cmd = cs_cmd_hist[POS_HIST_NUM - 1]
-        cs_cmd_hist.append(cs_cmd)
+        #cs_cmd = SRS.set_position(
+        #    cs_avg,
+        #    PWM_WID_FREQ, PWM_WID_MAX, PWM_WID_MIN, PWM_WID_TOL)
+        #if cs_cmd is 1:
+        #    cs_cmd = cs_cmd_hist[POS_HIST_NUM - 1]
+        #cs_cmd_hist.append(cs_cmd)
 
         # DEBUG:
-        print 'Carousel History: {}'.format(cs_cmd_hist)
+        #print 'Carousel History: {}'.format(cs_cmd_hist)
 
         # Check for Position Command Persistance.
-        cs_trend = SRS.check_trend(
-            cs_cmd_hist,
-            CS_CONTINUOUS)
+        #cs_trend = SRS.check_trend(
+        #    cs_cmd_hist,
+        #    CS_CONTINUOUS)
 
         # DEBUG:
-        print 'Carousel Trend: {}\n'.format(cs_trend)
+        #print 'Carousel Trend: {}\n'.format(cs_trend)
 
         # Process Position Command.
-        SRS.move_carousel(
-            cs_trend,
-            PIN_CS_OUT, CS_GRIPPER_NUM)
+        #SRS.move_carousel(
+        #    cs_trend,
+        #    PIN_CS_OUT, CS_GRIPPER_NUM)
 
         #
         # Shoulder Stepper polling.
         #
 
         # Determine Average Pulse Width.
-        #ss_avg = SRS.get_width(
-        #    PIN_SS_IN, PWM_AVG_NUM, PWM_WID_FREQ,
-        #    PWM_WID_MAX, PWM_WID_MIN, PWM_WID_TOL)
+        ss_avg = SRS.get_width(
+            PIN_SS_IN, PWM_AVG_NUM, PWM_WID_FREQ,
+            PWM_WID_MAX, PWM_WID_MIN, PWM_WID_TOL)
 
         # DEBUG:
-        #print 'Shoulder Pulse Width: {}'.format(ss_avg)
+        print 'Shoulder Pulse Width: {}'.format(ss_avg)
 
         # Add new Position Command to History.
-        #ss_cmd_hist.append(SRS.set_position(
-        #    ss_avg,
-        #    PWM_WID_FREQ, PWM_WID_MAX, PWM_WID_MIN, PWM_WID_TOL))
+        ss_cmd_hist.append(SRS.set_position(
+            ss_avg,
+            PWM_WID_FREQ, PWM_WID_MAX, PWM_WID_MIN, PWM_WID_TOL))
 
         # DEBUG:
-        #print 'Shoulder History: {}'.format(ss_cmd_hist)
+        print 'Shoulder History: {}'.format(ss_cmd_hist)
 
         # Check for Position Command Persistance.
-        #ss_trend = SRS.check_trend(
-        #    ss_cmd_hist,
-        #    SS_CONTINUOUS)
+        ss_trend = SRS.check_trend(
+            ss_cmd_hist,
+            SS_CONTINUOUS)
 
         # DEBUG:
-        #print 'Shoulder Trend: {}\n'.format(ss_trend)
+        print 'Shoulder Trend: {}\n'.format(ss_trend)
 
         # Process Position Command.
-        #SRS.move_shoulder(
-        #    ss_trend,
-        #    PIN_SS_OUT)
+        SRS.move_shoulder(
+            ss_trend,
+            PIN_SS_OUT)
 
         #
         # Pressure Transducer polling.

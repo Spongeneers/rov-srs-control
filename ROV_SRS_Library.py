@@ -314,14 +314,12 @@ def move_shoulder(cmd, out):
                     continued rotation.
     """
     if cmd is 2 or cmd is 0:
-        # Issue four step Commands (one full cycle).
-        for __step in range(4):
-            for __col in range((len(out))):
-                GPIO.output(out[__col], SS_COMMANDS[cmd][__col])
-            time.sleep(SS_DRIVE_STEP_PERSIST)
+        for __col in range((len(out))):
+            GPIO.output(out[__col], SS_COMMANDS[cmd][__col])
+        time.sleep(SS_DRIVE_STEP_PERSIST)
 
-            GPIO.output(out[1], GPIO.LOW)
-            time.sleep(SS_DRIVE_STEP_PERSIST)
+        GPIO.output(out[1], GPIO.LOW)
+        time.sleep(SS_DRIVE_STEP_PERSIST)
 
     else:
         # Hold Shoulder Stepper at desired Position.
