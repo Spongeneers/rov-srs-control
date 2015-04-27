@@ -25,10 +25,13 @@ from Adafruit_BBIO import GPIO
 
 # Hardware-related Constants.
 LA_MAX_STROKE = 2.0              # Firgelli L16-P: Max Stroke length [inch].
+LA_MAX_TIME = 1.6                # Firgelli L16-P: Max Stroke time [sec].
+
 CS_STEP_ANGLE = 1.8              # Soyo Unipolar: Step Angle [degrees].
+CS_DRIVE_STEP_PERSIST = 0.01     # Easy Driver: Signal Persist Time [sec].
+
 SS_STEP_ANGLE = 1.8              # Soyo Unipolar: Step Angle [degrees].
-CS_DRIVE_STEP_PERSIST = 0.01     # Big Easy Driver: Min Persist Time [sec].
-SS_DRIVE_STEP_PERSIST = 0.01     # Easy Driver: Min Persist Time [sec].
+SS_DRIVE_STEP_PERSIST = 0.01     # Big Easy Driver: Signal Persist Time [sec].
 
 # Command Library for Linear Actuator.
 LA_COMMANDS = [[GPIO.HIGH, GPIO.LOW],     # Extend Actuator.
@@ -74,17 +77,17 @@ def get_width(pin, size, freq, max, min, tol):
                     and minimum possible Pulse Widths [%].
 
     Returns:
-        avg:        The calculated Pulse Width [milliseconds].
+        width:      The calculated Pulse Width [milliseconds].
     """
     __WIDTH_MAX = ((1/freq)*(max/100))
     __WIDTH_MIN = ((1/freq)*(min/100))
     __WIDTH_TOL = (__WIDTH_MAX - __WIDTH_MIN)*(tol/100)
 
-    avg = 0.0
+    width = 0.0
 
     __rise_flag = 0.0
     __fall_flag = 0.0
-    __pwm_width = 0.0
+    __sample = 0.0
 
     for i in range(size):
         # Determine incoming signal Pulse Width.
@@ -94,21 +97,21 @@ def get_width(pin, size, freq, max, min, tol):
         GPIO.wait_for_edge(pin, GPIO.FALLING)
         __fall_flag = time.time()
 
-        __pwm_width = __fall_flag - __rise_flag
+        __sample = __fall_flag - __rise_flag
 
         # Correct for faulty values (missed edge events, etc.)
-        while __pwm_width >= (1/freq):
-            __pwm_width -= (1/freq)
-        while __pwm_width > (__WIDTH_MAX + __WIDTH_TOL):
-            __pwm_width -= __WIDTH_TOL
-        while __pwm_width < (__WIDTH_MIN - __WIDTH_TOL):
-            __pwm_width += __WIDTH_TOL
+        while __sample >= (1/freq):
+            __sample -= (1/freq)
+        while __sample > (__WIDTH_MAX + __WIDTH_TOL):
+            __sample -= __WIDTH_TOL
+        while __sample < (__WIDTH_MIN - __WIDTH_TOL):
+            __sample += __WIDTH_TOL
 
-        avg += __pwm_width
+        width += __sample
 
-    avg /= size
+    width /= size
 
-    return avg
+    return width
 
 def set_position(width, freq, max, min, tol):
     """Set the Position Command corresponding to a PWM Pulse Width.
@@ -182,7 +185,7 @@ def check_trend(hist, cont):
                     1  == Intermediate Pulse Width.
                     0  == Minimum Pulse Width.
     """
-    trend = -1
+    trend = 1
 
     __start_flag = True
     __end_flag = True
@@ -233,27 +236,45 @@ def move_linear(cmd, out, pot, stroke):
     Returns:
         N/A
     """
-    __UPPER_LIM = 1.0
-    __LOWER_LIM = 1.0 - stroke/LA_MAX_STROKE
+    #__UPPER_LIM = 1.0
+    #__LOWER_LIM = 1.0 - stroke/LA_MAX_STROKE
 
-    __pot_pos = 0.0
+    #__pot_pos = 0.0
+
+    #if cmd >= 0:
+    #    # Begin Linear Actuator motion.
+    #    for __col in range(len(out)):
+    #        GPIO.output(out[__col], LA_COMMANDS[__col][cmd])
+
+    #    # Check Potentiometer Signal.
+    #    if cmd is 2:
+    #        while __pot_pos > __LOWER_LIM:
+    #            __pot_pos = ADC.read(pot)    # BUG: Adafruit_BBIO.ADC Library
+    #            __pot_pos = ADC.read(pot)    # requires two read operations to
+    #                                         # obtain updated values.
+    #    elif cmd is 0:
+    #        while __pot_pos < __UPPER_LIM:
+    #            __pot_pos = ADC.read(pot)    # BUG: Adafruit_BBIO.ADC Library
+    #            __pot_pos = ADC.read(pot)    # requires two read operations to
+    #                                         # obtain updated values.
+
+    ## Hold Linear Actuator at desired Position.
+    #for __index in range(len(out)):
+    #    GPIO.output(out[__index], GPIO.LOW)
+
+    __RETRACT_TIME = (stroke/LA_MAX_STROKE)*LA_MAX_TIME
 
     if cmd >= 0:
         # Begin Linear Actuator motion.
         for __col in range(len(out)):
             GPIO.output(out[__col], LA_COMMANDS[__col][cmd])
 
-        # Check Potentiometer Signal.
+        # Issue Command for required duration of time.
         if cmd is 2:
-            while __pot_pos > __LOWER_LIM:
-                __pot_pos = ADC.read(pot)    # BUG: Adafruit_BBIO.ADC Library
-                __pot_pos = ADC.read(pot)    # requires two read operations to
-                                             # obtain updated values.
+            time.sleep(__RETRACT_TIME)
+
         elif cmd is 0:
-            while __pot_pos < __UPPER_LIM:
-                __pot_pos = ADC.read(pot)    # BUG: Adafruit_BBIO.ADC Library
-                __pot_pos = ADC.read(pot)    # requires two read operations to
-                                             # obtain updated values.
+            time.sleep(LA_MAX_TIME)
 
     # Hold Linear Actuator at desired Position.
     for __index in range(len(out)):
@@ -323,7 +344,8 @@ def move_shoulder(cmd, out):
 
     else:
         # Hold Shoulder Stepper at desired Position.
-        GPIO.output(out[1], GPIO.LOW)
+        for __index in range(len(out)):
+            GPIO.output(out[__index], GPIO.LOW)
 
 def setup_logfile(name):
     """Create File for data logging.
