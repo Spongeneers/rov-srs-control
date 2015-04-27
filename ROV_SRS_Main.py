@@ -52,9 +52,9 @@ PIN_CS_OUT = ["P8_13",      # Pin for "DIR" Signal (high/low direction).
 CS_GRIPPER_NUM = 2          # Number of Grippers on ROV.
 
 # Shoulder Stepper Hardware Constants.
-PIN_SS_IN  =  "P8_26"       # Pin for Input PWM from RC Controller.
-PIN_SS_OUT = ["P8_19",      # Pin for "DIR" Signal (high/low direction).
-              "P8_21"]      # Pin for "STEP" Signal (rising edge).
+PIN_SS_IN  =  "P8_10"       # Pin for Input PWM from RC Controller.
+PIN_SS_OUT = ["P8_13",      # Pin for "DIR" Signal (high/low direction).
+              "P8_15"]      # Pin for "STEP" Signal (rising edge).
 
 # Pressure Transducer Hardware Constants.
 PIN_PT_IN  = "P9_39"        # Pin for Input from Transducer.
@@ -187,7 +187,7 @@ def main():
             CS_CONTINUOUS)
 
         # DEBUG:
-        print 'Carousel Trend: {}'.format(cs_trend)
+        print 'Carousel Trend: {}\n'.format(cs_trend)
 
         # Process Position Command.
         SRS.move_carousel(
@@ -203,15 +203,24 @@ def main():
         #    PIN_SS_IN, PWM_AVG_NUM, PWM_WID_FREQ,
         #    PWM_WID_MAX, PWM_WID_MIN, PWM_WID_TOL)
 
+        # DEBUG:
+        #print 'Shoulder Pulse Width: {}'.format(ss_avg)
+
         # Add new Position Command to History.
         #ss_cmd_hist.append(SRS.set_position(
         #    ss_avg,
         #    PWM_WID_FREQ, PWM_WID_MAX, PWM_WID_MIN, PWM_WID_TOL))
 
+        # DEBUG:
+        #print 'Shoulder History: {}'.format(ss_cmd_hist)
+
         # Check for Position Command Persistance.
         #ss_trend = SRS.check_trend(
         #    ss_cmd_hist,
         #    SS_CONTINUOUS)
+
+        # DEBUG:
+        #print 'Shoulder Trend: {}\n'.format(ss_trend)
 
         # Process Position Command.
         #SRS.move_shoulder(

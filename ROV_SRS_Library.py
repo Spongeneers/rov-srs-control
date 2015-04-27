@@ -27,8 +27,8 @@ from Adafruit_BBIO import GPIO
 LA_MAX_STROKE = 2.0              # Firgelli L16-P: Max Stroke length [inch].
 CS_STEP_ANGLE = 1.8              # Soyo Unipolar: Step Angle [degrees].
 SS_STEP_ANGLE = 1.8              # Soyo Unipolar: Step Angle [degrees].
-CS_DRIVE_STEP_PERSIST = 0.001    # Big Easy Driver: Min Persist Time [sec].
-SS_DRIVE_STEP_PERSIST = 0.001    # Easy Driver: Min Persist Time [sec].
+CS_DRIVE_STEP_PERSIST = 0.01     # Big Easy Driver: Min Persist Time [sec].
+SS_DRIVE_STEP_PERSIST = 0.01     # Easy Driver: Min Persist Time [sec].
 
 # Command Library for Linear Actuator.
 LA_COMMANDS = [[GPIO.HIGH, GPIO.LOW],     # Extend Actuator.
@@ -38,12 +38,12 @@ LA_COMMANDS = [[GPIO.HIGH, GPIO.LOW],     # Extend Actuator.
 # Command Library for Carousel Stepper.
 CS_COMMANDS = [[GPIO.LOW, GPIO.LOW],      # Hold Stepper in place.
                [GPIO.LOW, GPIO.LOW],      # Hold Stepper in place.
-               [GPIO.HIGH, GPIO.HIGH]]    # Take one Step CW.
+               [GPIO.LOW, GPIO.HIGH]]     # Take one Step CW.
 
 # Command Library for Shoulder Stepper.
-SS_COMMANDS = [[GPIO.LOW, GPIO.HIGH],     # Take one Step CCW.
+SS_COMMANDS = [[GPIO.HIGH, GPIO.HIGH],    # Take one Step CCW.
                [GPIO.LOW, GPIO.LOW],      # Hold Stepper in place.
-               [GPIO.HIGH, GPIO.HIGH]]    # Take one Step CW
+               [GPIO.LOW, GPIO.HIGH]]     # Take one Step CW.
 
 def get_width(pin, size, freq, max, min, tol):
     """Calculate the Pulse Width of a PWM input signal.
@@ -204,11 +204,11 @@ def check_trend(hist, cont):
             __end_flag = False
 
     # Check for desired Command trend.
-    if __start_flag is True and __end_flag is True:
+    if cont is True and __end_flag is True:
+        trend = hist[len(hist) - 1]
+    elif __start_flag is True and __end_flag is True:
         if hist[0] is not hist[len(hist) - 1]:
             trend = hist[len(hist) - 1]
-    elif cont is True and __end_flag is True:
-        trend = hist[len(hist) - 1]
 
     return trend
 
@@ -280,13 +280,7 @@ def move_carousel(cmd, out, gripper):
     """
     __path_steps = ((1/float(gripper))*360)/(CS_STEP_ANGLE)
 
-    # DEBUG:
-    print 'Path Steps: {}'.format(__path_steps)
-
     if cmd is 2:
-        # DEBUG:
-        print 'Rotating Carousel\n'
-
         # Loop over single-step command.
         for __steps in range(int(__path_steps)):
             for __col in range((len(out))):
@@ -297,9 +291,6 @@ def move_carousel(cmd, out, gripper):
             time.sleep(CS_DRIVE_STEP_PERSIST)
 
     else:
-        # DEBUG:
-        print 'Halting Carousel\n'
-
         # Hold Carousel Stepper at desired Position.
         for __index in range(len(out)):
             GPIO.output(out[__index], GPIO.LOW)
@@ -322,19 +313,19 @@ def move_shoulder(cmd, out):
         next:       An Integer specifying the next Phase sequence for
                     continued rotation.
     """
-    if cmd >= 0:
-        # Issue single Command (Step or Hold).
-        for __col in range((len(out))):
-            GPIO.output(out[__col], CS_COMMANDS[cmd][__col])
-        time.sleep(SS_DRIVE_STEP_PERSIST)
+    if cmd is 2 or cmd is 0:
+        # Issue four step Commands (one full cycle).
+        for __step in range(4):
+            for __col in range((len(out))):
+                GPIO.output(out[__col], SS_COMMANDS[cmd][__col])
+            time.sleep(SS_DRIVE_STEP_PERSIST)
 
-        GPIO.output(out[1], GPIO.LOW)
-        time.sleep(SS_DRIVE_STEP_PERSIST)
+            GPIO.output(out[1], GPIO.LOW)
+            time.sleep(SS_DRIVE_STEP_PERSIST)
 
     else:
         # Hold Shoulder Stepper at desired Position.
-        for __index in range(len(out)):
-            GPIO.output(out[__index], GPIO.LOW)
+        GPIO.output(out[1], GPIO.LOW)
 
 def setup_logfile(name):
     """Create File for data logging.
