@@ -185,7 +185,7 @@ def check_trend(hist, cont):
                     1  == Intermediate Pulse Width.
                     0  == Minimum Pulse Width.
     """
-    trend = 1
+    trend = 2
 
     __start_flag = True
     __end_flag = True

@@ -51,9 +51,9 @@ PIN_CS_OUT = ["P8_13",      # Pin for "DIR" Signal (high/low direction).
 CS_GRIPPER_NUM = 2          # Number of Grippers on ROV.
 
 # Shoulder Stepper Hardware Constants.
-PIN_SS_IN  =  "P8_10"       # Pin for Input PWM from RC Controller.
-PIN_SS_OUT = ["P8_13",      # Pin for "DIR" Signal (high/low direction).
-              "P8_15"]      # Pin for "STEP" Signal (rising edge).
+PIN_SS_IN  =  "P8_26"       # Pin for Input PWM from RC Controller.
+PIN_SS_OUT = ["P8_17",      # Pin for "DIR" Signal (high/low direction).
+              "P8_19"]      # Pin for "STEP" Signal (rising edge).
 
 # Pressure Transducer Hardware Constants.
 PIN_PT_IN  = "P9_39"        # Pin for Input from Transducer.
@@ -132,54 +132,54 @@ def main():
         #
 
         # Determine Average Pulse Width.
-        la_avg = SRS.get_width(
-            PIN_LA_IN, PWM_AVG_NUM, PWM_WID_FREQ,
-            PWM_WID_MAX, PWM_WID_MIN, PWM_WID_TOL)
+        #la_avg = SRS.get_width(
+        #    PIN_LA_IN, PWM_AVG_NUM, PWM_WID_FREQ,
+        #    PWM_WID_MAX, PWM_WID_MIN, PWM_WID_TOL)
 
         # Add new Position Command to History.
-        la_cmd = SRS.set_position(
-            la_avg,
-            PWM_WID_FREQ, PWM_WID_MAX, PWM_WID_MIN, PWM_WID_TOL)
-        if la_cmd is 1:
-            la_cmd = la_cmd_hist[POS_HIST_NUM - 1]
-        la_cmd_hist.append(la_cmd)
+        #la_cmd = SRS.set_position(
+        #    la_avg,
+        #    PWM_WID_FREQ, PWM_WID_MAX, PWM_WID_MIN, PWM_WID_TOL)
+        #if la_cmd is 1:
+        #    la_cmd = la_cmd_hist[POS_HIST_NUM - 1]
+        #la_cmd_hist.append(la_cmd)
 
         # Check for Position Command Persistance.
-        la_trend = SRS.check_trend(
-            la_cmd_hist,
-            LA_CONTINUOUS)
+        #la_trend = SRS.check_trend(
+        #    la_cmd_hist,
+        #    LA_CONTINUOUS)
 
         # Process Position Command.
-        SRS.move_linear(
-            la_trend,
-            PIN_LA_OUT, PIN_LA_POT, LA_STROKE_TARGET)
+        #SRS.move_linear(
+        #    la_trend,
+        #    PIN_LA_OUT, PIN_LA_POT, LA_STROKE_TARGET)
 
         #
         # Carousel Stepper polling.
         #
 
         # Determine Average Pulse Width.
-        cs_avg = SRS.get_width(
-            PIN_CS_IN, PWM_AVG_NUM, PWM_WID_FREQ,
-            PWM_WID_MAX, PWM_WID_MIN, PWM_WID_TOL)
+        #cs_avg = SRS.get_width(
+        #    PIN_CS_IN, PWM_AVG_NUM, PWM_WID_FREQ,
+        #    PWM_WID_MAX, PWM_WID_MIN, PWM_WID_TOL)
 
         # Add new Position Command to History.
-        cs_cmd = SRS.set_position(
-            cs_avg,
-            PWM_WID_FREQ, PWM_WID_MAX, PWM_WID_MIN, PWM_WID_TOL)
-        if cs_cmd is 1:
-            cs_cmd = cs_cmd_hist[POS_HIST_NUM - 1]
-        cs_cmd_hist.append(cs_cmd)
+        #cs_cmd = SRS.set_position(
+        #    cs_avg,
+        #    PWM_WID_FREQ, PWM_WID_MAX, PWM_WID_MIN, PWM_WID_TOL)
+        #if cs_cmd is 1:
+        #    cs_cmd = cs_cmd_hist[POS_HIST_NUM - 1]
+        #cs_cmd_hist.append(cs_cmd)
 
         # Check for Position Command Persistance.
-        cs_trend = SRS.check_trend(
-            cs_cmd_hist,
-            CS_CONTINUOUS)
+        #cs_trend = SRS.check_trend(
+        #    cs_cmd_hist,
+        #    CS_CONTINUOUS)
 
         # Process Position Command.
-        SRS.move_carousel(
-            cs_trend,
-            PIN_CS_OUT, CS_GRIPPER_NUM)
+        #SRS.move_carousel(
+        #    cs_trend,
+        #    PIN_CS_OUT, CS_GRIPPER_NUM)
 
         #
         # Shoulder Stepper polling.
@@ -190,15 +190,24 @@ def main():
             PIN_SS_IN, PWM_AVG_NUM, PWM_WID_FREQ,
             PWM_WID_MAX, PWM_WID_MIN, PWM_WID_TOL)
 
+        # DEBUG:
+        print 'Shoulder Pulse Width: {}'.format(ss_avg)
+
         # Add new Position Command to History.
         ss_cmd_hist.append(SRS.set_position(
             ss_avg,
             PWM_WID_FREQ, PWM_WID_MAX, PWM_WID_MIN, PWM_WID_TOL))
 
+        # DEBUG:
+        print 'Shoulder History: {}'.format(ss_cmd_hist)
+
         # Check for Position Command Persistance.
         ss_trend = SRS.check_trend(
             ss_cmd_hist,
             SS_CONTINUOUS)
+
+        # DEBUG:
+        print 'Shoulder Trend: {}\n'.format(ss_trend)
 
         # Process Position Command.
         SRS.move_shoulder(
