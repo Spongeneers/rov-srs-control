@@ -185,7 +185,7 @@ def check_trend(hist, cont):
                     1  == Intermediate Pulse Width.
                     0  == Minimum Pulse Width.
     """
-    trend = 2
+    trend = 1
 
     __start_flag = True
     __end_flag = True
@@ -236,45 +236,23 @@ def move_linear(cmd, out, pot, stroke):
     Returns:
         N/A
     """
-    #__UPPER_LIM = 1.0
-    #__LOWER_LIM = 1.0 - stroke/LA_MAX_STROKE
+    __UPPER_LIM = 1.0
+    __LOWER_LIM = 1.0 - stroke/LA_MAX_STROKE
 
-    #__pot_pos = 0.0
-
-    #if cmd >= 0:
-    #    # Begin Linear Actuator motion.
-    #    for __col in range(len(out)):
-    #        GPIO.output(out[__col], LA_COMMANDS[__col][cmd])
-
-    #    # Check Potentiometer Signal.
-    #    if cmd is 2:
-    #        while __pot_pos > __LOWER_LIM:
-    #            __pot_pos = ADC.read(pot)    # BUG: Adafruit_BBIO.ADC Library
-    #            __pot_pos = ADC.read(pot)    # requires two read operations to
-    #                                         # obtain updated values.
-    #    elif cmd is 0:
-    #        while __pot_pos < __UPPER_LIM:
-    #            __pot_pos = ADC.read(pot)    # BUG: Adafruit_BBIO.ADC Library
-    #            __pot_pos = ADC.read(pot)    # requires two read operations to
-    #                                         # obtain updated values.
-
-    ## Hold Linear Actuator at desired Position.
-    #for __index in range(len(out)):
-    #    GPIO.output(out[__index], GPIO.LOW)
-
-    __RETRACT_TIME = (stroke/LA_MAX_STROKE)*LA_MAX_TIME
+    __pot_pos = 0.0
 
     if cmd >= 0:
         # Begin Linear Actuator motion.
         for __col in range(len(out)):
             GPIO.output(out[__col], LA_COMMANDS[__col][cmd])
 
-        # Issue Command for required duration of time.
+        # Check Potentiometer Signal.
         if cmd is 2:
-            time.sleep(__RETRACT_TIME)
-
+            while __pot_pos > __LOWER_LIM:
+                __pot_pos = ADC.read(pot)
         elif cmd is 0:
-            time.sleep(LA_MAX_TIME)
+            while __pot_pos < __UPPER_LIM:
+                __pot_pos = ADC.read(pot)
 
     # Hold Linear Actuator at desired Position.
     for __index in range(len(out)):
@@ -360,13 +338,13 @@ def setup_logfile(name):
     Returns:
         N/A 
     """
-    __fmt = '%Y-%m-%d_{name}'
+    __fmt = '%Y-%m-%d_{}'.format(name)
 
     # Create name with timestamp appended.
-    datename = datetime.datetime.now().strftime(__fmt).format(name = name)
+    __datename = datetime.now().strftime(__fmt).format(name = name)
 
     # Open the file in write mode.
-    file = open(datename,'w')
+    file = open(__datename,'w')
 
 def read_pressure(pin):
     """Read the pressure sensor value.
@@ -381,35 +359,36 @@ def read_pressure(pin):
     Returns:
         __diff:     The calculated pressure difference [psi].
     """
-    # Analog read voltage of the pressure differential sensor.
-    __diff = ADC.read_raw(pin)  
+    # Read the pressure transducer sensor signal.
+    # BUG: Adafruit_BBIO ADC Library requires two read operations
+    # to obtain an updated analog signal value.
+    __diff = ADC.read(pin)
+    __diff = ADC.read(pin)
 
-    # TODO(Giles): Map voltage value to pressure differential.  
+    # TODO: Map value to pressure differential.  
 
     return __diff
 
-def log_pressure(pin, freq):
+def log_pressure(diff, freq):
     """Log the pressure difference into the log file.
 
     This function reads the pressure from the sensor and writes a time 
     stamp and pressure value to a CSV log file.
 
     Args:
-        pin:        A String specifying the pin name on which the 
-                    pressure sensor signal is excepted.
+        diff:       A Float specifying the previously calculated
+                    pressure differential [psi].
         freq:       An Integer specifying the desired logging 
                     frequency [Hz].
 
     Returns:
         N/A 
     """
-    __diff = read_pressure(pin)
-
-    # TODO(Giles): Check if memory has been filled.
+    # TODO: Check if memory has been filled.
     # If memory has not been filled, write to file.
 
-    # Log Format: Time,Pressure
+    # Log Format: Time, Pressure
     file.write(datetime.now().strftime('%H:%M:%S'))
     file.write("\t")
-    file.write(str(__diff))
+    file.write(str(diff))
     file.write("\n")
